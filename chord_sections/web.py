@@ -13,8 +13,15 @@ from secrets import token_urlsafe
 from flask import Flask, abort, jsonify, render_template, request, send_file
 from werkzeug.utils import secure_filename
 
+from chord_sections import __version__
 from chord_sections.analysis import AnalysisResult, analyze_file, transpose_audio_file
-from chord_sections.local_ai import MODEL_SIZES, available_engines, transcribe_song
+from chord_sections.local_ai import (
+    MODEL_SIZES,
+    available_engines,
+    separate_stems,
+    transcribe_audio,
+    transcribe_song,
+)
 from chord_sections.lyrics import LyricLine
 from chord_sections.music import key_names
 from chord_sections.pdf_report import render_pdf
@@ -23,6 +30,7 @@ from chord_sections.pdf_report import render_pdf
 MAX_UPLOAD_BYTES = 300 * 1024 * 1024
 MAX_CACHED_REPORTS = 5
 ALLOWED_EXTENSIONS = {".aif", ".aiff", ".caf", ".flac", ".m4a", ".mp3", ".ogg", ".opus", ".wav"}
+FEEDBACK_URL = "https://github.com/yohoo217/tabCreater/issues/new?template=feedback.yml"
 
 
 @dataclass(frozen=True)
@@ -41,7 +49,11 @@ _saved_analyses_lock = threading.Lock()
 
 @app.get("/")
 def index():
-    return render_template("index.html")
+    return render_template(
+        "index.html",
+        app_version=__version__,
+        feedback_url=FEEDBACK_URL,
+    )
 
 
 @app.get("/api/ai-status")
@@ -117,6 +129,74 @@ def analyze_upload():
     return jsonify(_serialize_result(result, title, report_id))
 
 
+@app.post("/api/convert")
+def convert_upload():
+    uploaded_file = request.files.get("audio")
+    if uploaded_file is None or not uploaded_file.filename:
+        return jsonify(error="請先選擇音檔。"), 400
+
+    safe_filename = secure_filename(uploaded_file.filename)
+    extension = Path(safe_filename).suffix.lower()
+    if extension not in ALLOWED_EXTENSIONS:
+        return jsonify(error="不支援此音檔格式，請使用 WAV、MP3、M4A、FLAC、OGG 或 AIFF。"), 400
+
+    engines = available_engines()
+    if not engines["demucs"] or not engines["faster_whisper"]:
+        return jsonify(
+            error="自動轉換需要人聲分離與歌詞辨識模型。請在專案虛擬環境執行：python -m pip install -e '.[ai]'"
+        ), 503
+
+    model_size = request.form.get("model_size", "small")
+    language = request.form.get("language", "auto")
+    chroma_method = request.form.get("chroma_method", "stft")
+    if model_size not in MODEL_SIZES:
+        return jsonify(error="歌詞模型需選擇 base 或 small。"), 400
+    if language not in {"auto", "zh", "en", "ja", "ko"}:
+        return jsonify(error="不支援的歌詞辨識語言。"), 400
+    if chroma_method not in {"stft", "cqt"}:
+        return jsonify(error="不支援的分析解析度。"), 400
+
+    title = request.form.get("title", "").strip() or Path(safe_filename).stem
+    title = title[:120]
+    try:
+        with tempfile.TemporaryDirectory(prefix="chord-sections-convert-") as directory:
+            work_directory = Path(directory)
+            audio_path = work_directory / f"upload{extension}"
+            uploaded_file.save(audio_path)
+            vocals_path, instrumental_path = separate_stems(
+                audio_path,
+                work_directory / "separated",
+            )
+            lyrics = transcribe_audio(
+                vocals_path,
+                model_size=model_size,
+                language=None if language == "auto" else language,
+            )
+            result = analyze_file(
+                instrumental_path,
+                harmonic_focus=request.form.get("harmonic_focus") == "on",
+                chroma_method=chroma_method,
+            )
+    except (FileNotFoundError, ValueError) as error:
+        return jsonify(error=str(error)), 400
+    except RuntimeError as error:
+        return jsonify(error=str(error)), 503
+
+    report_id = token_urlsafe(18)
+    with _saved_analyses_lock:
+        _saved_analyses[report_id] = SavedAnalysis(result, title, lyrics)
+        while len(_saved_analyses) > MAX_CACHED_REPORTS:
+            _saved_analyses.popitem(last=False)
+
+    payload = _serialize_result(result, title, report_id)
+    payload["lyrics"] = [
+        {"start": line.start, "end": line.end, "text": line.text}
+        for line in lyrics
+    ]
+    payload["time_signature"] = None
+    return jsonify(payload)
+
+
 @app.get("/api/report/<report_id>.pdf")
 def download_pdf(report_id: str):
     with _saved_analyses_lock:
@@ -139,6 +219,9 @@ def download_pdf(report_id: str):
     language = request.args.get("lang", "zh")
     if language not in {"zh", "en"}:
         abort(400, description="不支援的報告語言。")
+    report_format = request.args.get("format", "full")
+    if report_format not in {"full", "sheet"}:
+        abort(400, description="不支援的 PDF 格式。")
 
     content = render_pdf(
         saved.result,
@@ -148,10 +231,12 @@ def download_pdf(report_id: str):
         original_key=None if original_key == "auto" else original_key,
         lyrics=saved.lyrics,
         language=language,
+        song_sheet=report_format == "sheet",
     )
     suffix = f"-{semitones:+d}st" if semitones else ""
     suffix += f"-capo{capo_fret}" if capo_fret else ""
-    download_name = f"{secure_filename(saved.title) or 'song'}{suffix}-chords.pdf"
+    suffix += "-song-sheet" if report_format == "sheet" else "-chords"
+    download_name = f"{secure_filename(saved.title) or 'song'}{suffix}.pdf"
     from io import BytesIO
 
     return send_file(

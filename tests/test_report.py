@@ -50,6 +50,20 @@ class ReportTests(unittest.TestCase):
         self.assertTrue(report.startswith(b"%PDF-"))
         self.assertGreater(len(report), 1000)
 
+    def test_pdf_can_export_a_minimal_lyrics_and_chords_sheet(self) -> None:
+        from chord_sections.pdf_report import render_pdf
+
+        lyrics = (
+            LyricLine(0.0, 4.0, "歌詞第一句"),
+            LyricLine(4.0, 8.0, "歌詞第二句"),
+        )
+        song_sheet = render_pdf(self.result, "簡潔歌譜", lyrics=lyrics, song_sheet=True)
+        full_report = render_pdf(self.result, "簡潔歌譜", lyrics=lyrics)
+
+        self.assertTrue(song_sheet.startswith(b"%PDF-"))
+        self.assertGreater(len(song_sheet), 1000)
+        self.assertLess(len(song_sheet), len(full_report))
+
     def test_pdf_accepts_english_locale(self) -> None:
         from chord_sections.pdf_report import render_pdf
 
@@ -58,16 +72,19 @@ class ReportTests(unittest.TestCase):
         self.assertTrue(report.startswith(b"%PDF-"))
         self.assertGreater(len(report), 1000)
 
-    def test_pdf_lyrics_pair_chords_above_each_lyric_line(self) -> None:
-        from chord_sections.pdf_report import _chords_for_lyrics
+    def test_pdf_assigns_chords_to_the_lyric_line_containing_their_start(self) -> None:
+        from chord_sections.pdf_report import _chord_positions_for_lyrics, _chords_for_lyrics
 
+        line = LyricLine(1.0, 6.0, "歌詞")
         chords = _chords_for_lyrics(
-            LyricLine(1.0, 6.0, "歌詞"),
+            line,
             self.result,
             lambda chord: chord,
         )
+        positions = _chord_positions_for_lyrics(line, self.result, lambda chord: chord)
 
-        self.assertEqual(chords, "C → Am")
+        self.assertEqual(chords, "Am")
+        self.assertEqual(positions, [("Am", 0.6)])
 
 
 if __name__ == "__main__":

@@ -22,8 +22,14 @@ class WebInterfaceTests(unittest.TestCase):
         self.assertIn(b'id="language-toggle"', response.data)
         self.assertIn(b'data-i18n="hero_title"', response.data)
         self.assertIn(b'data-i18n="lyrics_title"', response.data)
+        self.assertIn(b'data-i18n="conversion_help"', response.data)
+        self.assertIn(b"v0.2.0", response.data)
+        self.assertIn(b"issues/new?template=feedback.yml", response.data)
+        self.assertIn('data-i18n="analyze_song">轉換歌曲'.encode(), response.data)
         self.assertIn(b'id="lyrics-settings"', response.data)
         self.assertIn(b'id="analysis-details"', response.data)
+        self.assertNotIn(b'id="bpm"', response.data)
+        self.assertNotIn(b'id="time-signature"', response.data)
 
     def test_rejects_unsupported_audio_format(self) -> None:
         response = self.client.post(
@@ -81,6 +87,82 @@ class WebInterfaceTests(unittest.TestCase):
         self.assertTrue(transposed_pdf.data.startswith(b"%PDF-"))
         self.assertIn("capo2", transposed_pdf.headers["Content-Disposition"])
 
+    def test_convert_separates_then_transcribes_then_analyzes_instrumental(self) -> None:
+        result = AnalysisResult(
+            duration=8.0,
+            chords=(ChordEvent(0.0, 8.0, "C", 0.8),),
+            sections=(Section("A", 0.0, 8.0, ("C",)),),
+            tempo_bpm=120,
+            estimated_key="C",
+        )
+        recognized = (LyricLine(0.5, 2.5, "歌詞"),)
+        calls: list[str] = []
+
+        def separate(audio_path, output_directory):
+            calls.append("separate")
+            return output_directory / "vocals.wav", output_directory / "no_vocals.wav"
+
+        def transcribe(audio_path, *, model_size, language):
+            calls.append("transcribe")
+            self.assertEqual(audio_path.name, "vocals.wav")
+            self.assertEqual(model_size, "base")
+            self.assertEqual(language, "zh")
+            return recognized
+
+        def analyze(audio_path, **kwargs):
+            calls.append("analyze")
+            self.assertEqual(audio_path.name, "no_vocals.wav")
+            self.assertEqual(kwargs["chroma_method"], "cqt")
+            return result
+
+        with (
+            patch(
+                "chord_sections.web.available_engines",
+                return_value={"demucs": True, "faster_whisper": True},
+            ),
+            patch("chord_sections.web.separate_stems", side_effect=separate),
+            patch("chord_sections.web.transcribe_audio", side_effect=transcribe),
+            patch("chord_sections.web.analyze_file", side_effect=analyze),
+        ):
+            response = self.client.post(
+                "/api/convert",
+                data={
+                    "language": "zh",
+                    "model_size": "base",
+                    "chroma_method": "cqt",
+                    "audio": (io.BytesIO(b"audio"), "song.wav"),
+                },
+                content_type="multipart/form-data",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(calls, ["separate", "transcribe", "analyze"])
+        payload = response.get_json()
+        self.assertEqual(payload["lyrics"][0]["text"], "歌詞")
+        self.assertEqual(payload["tempo_bpm"], 120)
+        self.assertIsNone(payload["time_signature"])
+        with patch("chord_sections.web.render_pdf", return_value=b"%PDF-test") as render:
+            pdf_response = self.client.get(
+                f"/api/report/{payload['report_id']}.pdf?format=sheet"
+            )
+        self.assertEqual(pdf_response.status_code, 200)
+        self.assertEqual(render.call_args.kwargs["lyrics"], recognized)
+        self.assertTrue(render.call_args.kwargs["song_sheet"])
+
+    def test_convert_requires_local_separation_and_transcription_models(self) -> None:
+        with patch(
+            "chord_sections.web.available_engines",
+            return_value={"demucs": False, "faster_whisper": True},
+        ):
+            response = self.client.post(
+                "/api/convert",
+                data={"audio": (io.BytesIO(b"audio"), "song.wav")},
+                content_type="multipart/form-data",
+            )
+
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("人聲分離", response.get_json()["error"])
+
     def test_rejects_out_of_range_transposition_and_capo(self) -> None:
         result = AnalysisResult(duration=1.0, chords=(), sections=(), estimated_key="C")
         with patch("chord_sections.web.analyze_file", return_value=result):
@@ -103,6 +185,34 @@ class WebInterfaceTests(unittest.TestCase):
             self.client.get(f"/api/report/{report_id}.pdf?lang=fr").status_code,
             400,
         )
+        self.assertEqual(
+            self.client.get(f"/api/report/{report_id}.pdf?format=unknown").status_code,
+            400,
+        )
+
+    def test_pdf_download_selects_simple_sheet_or_full_report(self) -> None:
+        result = AnalysisResult(
+            duration=8.0,
+            chords=(ChordEvent(0.0, 8.0, "C", 0.8),),
+            sections=(Section("A", 0.0, 8.0, ("C",)),),
+        )
+        with patch("chord_sections.web.analyze_file", return_value=result):
+            analyzed = self.client.post(
+                "/api/analyze",
+                data={"audio": (io.BytesIO(b"audio"), "song.wav")},
+                content_type="multipart/form-data",
+            )
+        report_id = analyzed.get_json()["report_id"]
+        report_url = f"/api/report/{report_id}.pdf"
+
+        with patch("chord_sections.web.render_pdf", return_value=b"%PDF-sheet") as render:
+            sheet = self.client.get(f"{report_url}?format=sheet")
+            self.assertTrue(render.call_args.kwargs["song_sheet"])
+            self.assertIn("song-sheet.pdf", sheet.headers["Content-Disposition"])
+
+            full = self.client.get(f"{report_url}?format=full")
+            self.assertFalse(render.call_args.kwargs["song_sheet"])
+            self.assertIn("-chords.pdf", full.headers["Content-Disposition"])
 
     def test_transposed_audio_download_returns_wav(self) -> None:
         with patch("chord_sections.web.transpose_audio_file", return_value=b"RIFFxxxxWAVE") as shift:

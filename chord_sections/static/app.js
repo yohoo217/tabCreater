@@ -2,7 +2,6 @@ const form = document.querySelector("#analysis-form");
 const fileInput = document.querySelector("#audio");
 const fileName = document.querySelector("#file-name");
 const audioPreview = document.querySelector("#audio-preview");
-const timeSignatureSelect = document.querySelector("#time-signature");
 const errorMessage = document.querySelector("#error-message");
 const analyzeButton = document.querySelector("#analyze-button");
 const resultsEmpty = document.querySelector("#results-empty");
@@ -16,6 +15,7 @@ const lyricsStatus = document.querySelector("#lyrics-status");
 const lyricsList = document.querySelector("#lyrics-list");
 const saveLyricsButton = document.querySelector("#save-lyrics");
 const lyricsCorrection = document.querySelector("#lyrics-correction");
+const lyricsCorrectionStatus = document.querySelector("#lyrics-correction-status");
 const lyricsReference = document.querySelector("#lyrics-reference");
 const lyricsFile = document.querySelector("#lyrics-file");
 const separateVocalsCheckbox = document.querySelector("#separate-vocals");
@@ -27,6 +27,7 @@ let currentObjectUrl = null;
 let currentAnalysis = null;
 let currentLyrics = [];
 let aiEngines = { demucs: false, faster_whisper: false };
+let conversionStage = null;
 let currentLanguage = localStorage.getItem("chord-sections-language") === "en" ? "en" : "zh";
 const translations = {
   zh: {
@@ -35,14 +36,15 @@ const translations = {
     brand: "和弦整理室",
     privacy: "音檔只在這台電腦處理",
     hero_title: "把一首歌，整理成看得懂的和弦表。",
-    hero_copy: "選擇音檔、調整拍子設定，分析後即可預覽和下載 PDF。",
-    setup_title: "歌曲與拍子",
+    hero_copy: "上傳歌曲並按下轉換，即可產生歌詞和弦譜。",
+    setup_title: "歌曲",
     local_badge: "只在本機",
     song_title: "歌曲名稱",
     song_title_placeholder: "可留空，使用檔名",
     choose_audio: "選擇音訊",
     choose_file: "點此選擇歌曲檔案",
     supported_formats: "WAV、MP3、M4A、FLAC、OGG 或 AIFF，最大 300 MB",
+    language_help: "選擇歌曲主要演唱語言可避免自動偵測選錯；若歌曲混合多種語言，請使用自動偵測。",
     tempo: "速度 BPM",
     auto_estimate: "自動估計",
     tempo_help: "知道歌曲速度時可手動填寫；留空會自動估計。",
@@ -67,19 +69,27 @@ const translations = {
     resolution_help: "耗時依音檔和電腦而異；可比較結果，但不保證每首歌都更準。",
     harmonic_focus: "加強和聲分析",
     harmonic_focus_help: "弱化鼓與瞬態聲響；不保證每首歌都會更準。",
-    analyze_song: "分析這首歌",
+    analyze_song: "轉換歌曲",
+    conversion_help: "自動分離人聲、辨識歌詞，再用伴奏分析和弦。可先在進階設定指定歌詞語言。",
+    converting_label: "正在分離人聲、辨識歌詞並分析和弦…",
     confidence_title: "關於信心分數",
-    confidence_note: "它是模型符合度與候選差距的啟發式指標，不是準確率。不要只為了分數變高而更改 BPM 或拍號。",
+    confidence_note: "它是模型符合度與候選差距的啟發式指標，不是準確率；和弦結果仍建議搭配聆聽校對。",
+    advanced_analysis: "進階分析設定",
     results_empty_title: "分析結果會在這裡",
-    results_empty_copy: "選擇歌曲並分析後，主要結果會以歌詞搭配和弦的方式呈現。",
+    results_empty_copy: "上傳歌曲並轉換後，這裡會顯示簡潔的歌詞和弦譜。",
     chord_diagram_title: "吉他指法",
+    sounds_like: "實際音高",
+    instrumental_intro: "前奏／無人聲段落",
+    instrumental_middle: "間奏／無人聲段落",
+    instrumental_outro: "尾奏／無人聲段落",
     unavailable_chord_shape: "目前沒有這個和弦的常用指法圖。",
     shape_label: "指法",
     chord_shape_info: "指法 {shape} · {capo}",
-    download_pdf: "下載 PDF",
+    download_song_sheet: "歌詞和弦譜",
+    download_full_report: "下載完整分析報告 PDF",
     transposition_title: "調性、移調與 Capo",
     transposition_subtitle: "和弦譜或另存移調後音檔",
-    original_key: "原調校正",
+    original_key: "原調／調性校正",
     use_estimate: "使用自動估計",
     target_transposition: "目標移調",
     capo_position: "Capo 位置",
@@ -90,15 +100,11 @@ const translations = {
     section_subtitle: "相似段落使用相同標記",
     lyrics_title: "歌詞搭配和弦",
     lyrics_subtitle: "辨識結果可修改，時間以音檔為準",
-    lyrics_settings: "歌詞辨識設定",
-    open_lyrics_settings: "開啟歌詞辨識設定",
-    more_analysis: "更多分析結果與設定",
-    song_sheet_empty: "尚未產生歌詞和弦譜。展開歌詞辨識設定，開始分離人聲並辨識歌詞。",
-    lyrics_settings: "歌詞辨識設定",
-    open_lyrics_settings: "開啟歌詞辨識設定",
-    more_analysis: "更多分析結果與設定",
-    song_sheet_empty: "尚未產生歌詞和弦譜。展開歌詞辨識設定，開始分離人聲並辨識歌詞。",
-    lyrics_intro: "本機分離人聲並辨識歌詞。首次執行會從 Hugging Face 下載所選模型；Small 約 484 MB，Base 約 145 MB。歌唱辨識可能漏字或聽錯，請回聽校對。",
+    lyrics_settings: "進階：歌詞辨識與校正",
+    open_lyrics_settings: "開啟進階歌詞設定",
+    more_analysis: "展開完整分析與設定",
+    song_sheet_empty: "尚未辨識到歌詞。可展開進階設定，手動辨識或匯入歌詞校正。",
+    lyrics_intro: "本機分離人聲並辨識歌詞。語言與模型可在歌曲區的進階設定調整；歌唱辨識可能漏字或聽錯，請回聽校對。",
     recognition_language: "辨識語言",
     auto_detect: "自動偵測",
     model: "模型",
@@ -106,12 +112,12 @@ const translations = {
     model_base: "Base（較小，約 145 MB）",
     separate_vocals: "先分離人聲",
     separate_vocals_help: "建議開啟；首次使用會另外下載 Demucs 模型約 84 MB。",
-    transcribe_button: "分離人聲並辨識歌詞",
+    transcribe_button: "重新辨識歌詞",
     checking_models: "檢查本機歌詞模型…",
-    import_lyrics: "匯入文字歌詞校正（每行需對應一條辨識結果）",
-    lyrics_txt: "選擇純文字歌詞 .txt",
-    lyrics_placeholder: "每行歌詞對應一條辨識結果；匯入後仍可逐行編輯。",
-    apply_lyrics: "依行套用歌詞",
+    import_lyrics: "匯入歌詞校正（支援 LRC 時間戳或每行一句）",
+    lyrics_txt: "選擇歌詞文字檔（.txt 或 .lrc）",
+    lyrics_placeholder: "可貼上 [00:06.51] 歌詞格式的 LRC；也可每行輸入一句，行數可不同。",
+    apply_lyrics: "匯入",
     save_lyrics: "儲存歌詞到 PDF",
     chord_timeline: "和弦時間軸",
     timeline_help: "點選時間可跳轉聆聽",
@@ -122,10 +128,12 @@ const translations = {
     capo_shape: "Capo 指型",
     confidence: "信心",
     footer_note: "本機分析工具 · 和弦與段落為自動估計，請搭配聆聽校對。",
+    feedback_link: "回報問題或建議",
     no_file: "請先選擇音檔。",
     analyze_error: "分析失敗，請檢查音檔後再試。",
     analyze_failed: "分析失敗，請稍後再試。",
     estimated_unknown: "未能估計",
+    not_detected: "未偵測",
     length: "長度",
     tempo_stat: "速度",
     meter_stat: "拍號",
@@ -149,15 +157,24 @@ const translations = {
     ai_status_error: "無法連線檢查本機模型；請確認本機服務仍在執行。",
     ai_install_missing: "歌詞模型尚未安裝。請在專案虛擬環境執行：python -m pip install -e '.[ai]'",
     local_download_note: "音檔會留在本機；模型若尚未快取，首次使用會從 Hugging Face 下載。",
-    analyze_before_transcribe: "請先分析歌曲，再開始歌詞辨識。",
+    analyze_before_transcribe: "上傳歌曲並按下「轉換歌曲」後，會自動分析和弦與辨識歌詞。",
+    transcription_unavailable: "和弦分析已完成，但本機未安裝歌詞辨識。可展開進階設定查看安裝方式。",
+    transcription_retry_error: "歌詞辨識未完成。和弦分析結果已保留；可在進階設定中調整後重試。",
+    transcription_note_without_separation: "歌詞辨識完成（未分離人聲）。請檢查辨識結果；可在進階設定中嘗試人聲分離。",
+    transcribing_conversion_label: "正在分析和辨識歌詞…",
     transcribing_with_separation: "正在分離人聲並辨識歌詞。首次執行會下載模型，可能需要數分鐘…",
     transcribing_only: "正在辨識歌詞。首次執行會下載 Whisper 模型，可能需要數分鐘…",
     transcribe_error: "歌詞辨識失敗。",
     transcription_note: "歌詞是自動辨識結果；唱歌辨識可能有漏字或錯字，請逐行校對。可匯入文字歌詞或直接修改，儲存後會加入 PDF。",
     no_lyrics: "沒有辨識到歌詞；可試著選擇語言、上傳較清楚的音檔，或先關閉人聲分離比較。",
     lyrics_file_too_large: "歌詞文字檔不可超過 1 MB。",
-    lyrics_line_mismatch: "歌詞有 {fileLines} 行，但辨識結果有 {segments} 段。請調整成相同行數，或直接逐段編輯。",
-    lyrics_applied: "文字已套用到原辨識時間。請檢查同步位置後儲存。",
+    lyrics_empty_import: "請至少輸入一行歌詞。",
+    lyrics_line_mismatch: "行數不同，已依目前歌詞的時間範圍平均分配新時間；時間是估計值，請逐段試播校對後儲存。",
+    lyrics_applied: "文字已依行套用歌詞。行數不同時，時間會平均估計；請試播校對後儲存。",
+    lyrics_lrc_applied: "已依 LRC 時間戳套用歌詞；有 {count} 行超出音檔長度而未匯入。最後一句結束時間為估計值，請試播校對。",
+    lyrics_lrc_invalid: "找不到有效的 LRC 時間戳歌詞，請確認格式如 [00:06.51]歌詞。",
+    lyrics_lrc_preview: "已辨識 {count} 句 LRC：{first} 至 {last}。按下套用後會依時間戳排列，不會平均分配。",
+    lyrics_text_preview: "目前是純文字歌詞，共 {count} 行；套用時會依辨識時間或平均估算時間。",
     save_error: "無法儲存歌詞。",
     saved_lyrics: "已儲存 {count} 行歌詞；下載 PDF 即包含歌詞和和弦。",
     lyric_line: "歌詞第 {number} 行",
@@ -179,14 +196,15 @@ const translations = {
     brand: "Chord Sections",
     privacy: "Audio stays on this computer",
     hero_title: "Turn a song into a clear chord sheet.",
-    hero_copy: "Choose an audio file, set the beat details, then review and download a PDF.",
-    setup_title: "Song & timing",
+    hero_copy: "Upload a song and select Convert to create a chord-and-lyric sheet.",
+    setup_title: "Song",
     local_badge: "Local only",
     song_title: "Song title",
     song_title_placeholder: "Optional; defaults to the file name",
     choose_audio: "Choose audio",
     choose_file: "Choose a song file",
     supported_formats: "WAV, MP3, M4A, FLAC, OGG or AIFF, up to 300 MB",
+    language_help: "Choose the main sung language to avoid a wrong automatic guess. Use auto-detect for songs that mix languages.",
     tempo: "Tempo",
     auto_estimate: "Estimate automatically",
     tempo_help: "Enter the known tempo, or leave blank for an automatic estimate.",
@@ -211,19 +229,27 @@ const translations = {
     resolution_help: "Time depends on the audio and computer. Compare methods; neither guarantees better results.",
     harmonic_focus: "Enhance harmonic analysis",
     harmonic_focus_help: "Reduce drums and transients; results may vary by song.",
-    analyze_song: "Analyze song",
+    analyze_song: "Convert song",
+    conversion_help: "Vocals are separated and transcribed first; chords are then analyzed from the instrumental. Choose a lyric language in Advanced settings if known.",
+    converting_label: "Separating vocals, transcribing lyrics, and analyzing chords…",
     confidence_title: "About confidence scores",
-    confidence_note: "This heuristic reflects template fit and the gap to the next candidate, not accuracy. Do not change BPM or meter just to raise the score.",
+    confidence_note: "This heuristic reflects template fit and the gap to the next candidate, not accuracy. Review chord estimates while listening.",
+    advanced_analysis: "Advanced analysis settings",
     results_empty_title: "Your results will appear here",
-    results_empty_copy: "Analyze a song to see the main result as lyrics paired with chords.",
+    results_empty_copy: "Upload and convert a song to see a clean lyrics-and-chords sheet here.",
     chord_diagram_title: "Guitar fingering",
+    sounds_like: "sounding chord",
+    instrumental_intro: "Intro / instrumental",
+    instrumental_middle: "Instrumental break",
+    instrumental_outro: "Outro / instrumental",
     unavailable_chord_shape: "A common fingering diagram is not available for this chord yet.",
     shape_label: "shape",
     chord_shape_info: "Shape {shape} · {capo}",
-    download_pdf: "Download PDF",
+    download_song_sheet: "Lyrics & chords PDF",
+    download_full_report: "Download full analysis PDF",
     transposition_title: "Key, transposition & capo",
     transposition_subtitle: "Transpose the chart or save a shifted audio file",
-    original_key: "Original key correction",
+    original_key: "Key / original-key correction",
     use_estimate: "Use automatic estimate",
     target_transposition: "Transpose to",
     capo_position: "Capo position",
@@ -234,15 +260,11 @@ const translations = {
     section_subtitle: "Similar sections share a label",
     lyrics_title: "Lyrics with chords",
     lyrics_subtitle: "Edit recognized text; timings follow the audio",
-    lyrics_settings: "Lyric transcription settings",
-    open_lyrics_settings: "Open lyric transcription settings",
-    more_analysis: "More analysis results & settings",
-    song_sheet_empty: "No chord-and-lyric sheet yet. Open lyric settings to separate vocals and transcribe lyrics.",
-    lyrics_settings: "Lyric transcription settings",
-    open_lyrics_settings: "Open lyric transcription settings",
-    more_analysis: "More analysis results & settings",
-    song_sheet_empty: "No chord-and-lyric sheet yet. Open lyric settings to separate vocals and transcribe lyrics.",
-    lyrics_intro: "Separate vocals and transcribe lyrics locally. Models download from Hugging Face on first use: Small ~484 MB, Base ~145 MB. Singing recognition may miss or mishear words; review by listening.",
+    lyrics_settings: "Advanced: transcription & correction",
+    open_lyrics_settings: "Open advanced lyric settings",
+    more_analysis: "Show full analysis & settings",
+    song_sheet_empty: "No lyrics were recognized. Open advanced settings to transcribe manually or import corrected lyrics.",
+    lyrics_intro: "Vocals are separated and transcribed locally. Choose the language and model in the song's Advanced settings. Singing recognition may miss or mishear words; review by listening.",
     recognition_language: "Recognition language",
     auto_detect: "Detect automatically",
     model: "Model",
@@ -250,12 +272,12 @@ const translations = {
     model_base: "Base (smaller, ~145 MB)",
     separate_vocals: "Separate vocals first",
     separate_vocals_help: "Recommended; downloads an additional Demucs model (~84 MB) on first use.",
-    transcribe_button: "Separate vocals & transcribe",
+    transcribe_button: "Transcribe lyrics again",
     checking_models: "Checking local speech models…",
-    import_lyrics: "Import lyrics to correct text (one line per recognized segment)",
-    lyrics_txt: "Choose a plain-text lyrics file (.txt)",
-    lyrics_placeholder: "One lyric line per recognized segment; you can edit each line after importing.",
-    apply_lyrics: "Apply lyrics by line",
+    import_lyrics: "Import lyrics (LRC timestamps or one phrase per line)",
+    lyrics_txt: "Choose a lyrics file (.txt or .lrc)",
+    lyrics_placeholder: "Paste LRC such as [00:06.51] Lyrics, or enter one phrase per line. Any line count is supported.",
+    apply_lyrics: "Import lyrics",
     save_lyrics: "Save lyrics to PDF",
     chord_timeline: "Chord timeline",
     timeline_help: "Select a timestamp to play from that point",
@@ -266,10 +288,12 @@ const translations = {
     capo_shape: "Capo shape",
     confidence: "Confidence",
     footer_note: "Local audio analysis · Chords and sections are estimates; please review by listening.",
+    feedback_link: "Report an issue or suggestion",
     no_file: "Please choose an audio file first.",
     analyze_error: "Analysis failed. Check the audio file and try again.",
     analyze_failed: "Analysis failed. Please try again.",
     estimated_unknown: "Unavailable",
+    not_detected: "Not detected",
     length: "Duration",
     tempo_stat: "Tempo",
     meter_stat: "Meter",
@@ -293,15 +317,24 @@ const translations = {
     ai_status_error: "Could not check local models. Make sure the local app is running.",
     ai_install_missing: "Speech models are not installed. Run: python -m pip install -e '.[ai]'",
     local_download_note: "Audio stays on this computer. Models download from Hugging Face the first time they are used.",
-    analyze_before_transcribe: "Analyze a song before transcribing lyrics.",
+    analyze_before_transcribe: "Upload a song and select Convert to analyze chords and transcribe lyrics automatically.",
+    transcription_unavailable: "Chord analysis is complete, but lyric transcription is not installed. Open advanced settings for setup instructions.",
+    transcription_retry_error: "Lyric transcription did not finish. Chord analysis is preserved; adjust the advanced settings and retry.",
+    transcription_note_without_separation: "Lyrics were transcribed without vocal separation. Review the results; you can try separation in advanced settings.",
+    transcribing_conversion_label: "Analyzing audio and transcribing lyrics…",
     transcribing_with_separation: "Separating vocals and transcribing. First use may download models and take several minutes…",
     transcribing_only: "Transcribing lyrics. First use may download the Whisper model and take several minutes…",
     transcribe_error: "Lyric transcription failed.",
     transcription_note: "Transcription finished. Review each segment, or import a text file to correct the words. Save to include lyrics in the PDF.",
     no_lyrics: "No lyrics were recognized. Try selecting a language, using a clearer recording, or turning off vocal separation.",
     lyrics_file_too_large: "The lyrics text file must be 1 MB or smaller.",
-    lyrics_line_mismatch: "The file has {fileLines} lines, but there are {segments} recognized segments. Match the line counts or edit each segment manually.",
-    lyrics_applied: "Text applied using the original timestamps. Review the alignment, then save.",
+    lyrics_empty_import: "Enter at least one lyric line.",
+    lyrics_line_mismatch: "The line count differs, so new timestamps were estimated evenly across the current lyric range. Preview each line and check the alignment before saving.",
+    lyrics_applied: "Lyrics were applied by line. When the line count differs, timestamps are estimated evenly; preview and verify them before saving.",
+    lyrics_lrc_applied: "Lyrics were aligned to LRC timestamps; {count} lines outside the audio duration were skipped. The final line's end time is estimated; preview and verify it.",
+    lyrics_lrc_invalid: "No valid timestamped LRC lyrics found. Check for lines like [00:06.51]Lyrics.",
+    lyrics_lrc_preview: "Detected {count} LRC lines from {first} to {last}. Applying will use these timestamps, not evenly distribute the lyrics.",
+    lyrics_text_preview: "Plain text detected: {count} lines. Applying will use recognized timings or estimate them evenly.",
     save_error: "Could not save lyrics.",
     saved_lyrics: "Saved {count} lyric lines. Download the PDF to include lyrics and chords.",
     lyric_line: "Lyric line {number}",
@@ -354,7 +387,7 @@ function applyLanguage() {
     renderLyrics();
     renderTransposition();
   }
-  if (analyzeButton.classList.contains("loading")) setLoading(true);
+  if (analyzeButton.classList.contains("loading")) setLoading(true, conversionStage);
   if (transcribeButton.classList.contains("loading")) setTranscribing(true);
   updateTranscribeAvailability();
 }
@@ -425,12 +458,6 @@ fileInput.addEventListener("change", () => {
 applyLanguage();
 refreshAiStatus();
 
-timeSignatureSelect.addEventListener("change", () => {
-  const [numerator, denominator] = timeSignatureSelect.value.split("/");
-  document.querySelector("#time-signature-numerator").value = numerator;
-  document.querySelector("#time-signature-denominator").value = denominator;
-});
-
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   errorMessage.hidden = true;
@@ -440,21 +467,26 @@ form.addEventListener("submit", async (event) => {
   }
 
   const formData = new FormData(form);
-  setLoading(true);
+  setLoading(true, "converting");
   try {
-    const response = await fetch("/api/analyze", { method: "POST", body: formData });
+    const response = await fetch("/api/convert", { method: "POST", body: formData });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || t("analyze_error"));
     currentAnalysis = result;
-    currentLyrics = [];
+    currentLyrics = (result.lyrics || []).map((line) => ({ ...line }));
     populateOriginalKeys(result.estimated_key);
     transposedAudioButton.disabled = false;
     updateTranscribeAvailability();
-    lyricsList.hidden = true;
-    lyricsCorrection.hidden = true;
-    saveLyricsButton.hidden = true;
+    lyricsSettings.open = false;
+    lyricsStatus.textContent = currentLyrics.length
+      ? t("transcription_note")
+      : t("no_lyrics");
+    lyricsCorrectionStatus.hidden = true;
+    lyricsCorrection.hidden = false;
+    saveLyricsButton.hidden = !currentLyrics.length;
     renderResult(result);
   } catch (error) {
+    lyricsSettings.open = true;
     showError(error instanceof Error ? localizeError(error.message) : t("analyze_failed"));
   } finally {
     setLoading(false);
@@ -465,7 +497,8 @@ function renderResult(result) {
   resultsEmpty.hidden = true;
   resultsContent.hidden = false;
   document.querySelector("#result-title").textContent = result.title;
-  document.querySelector("#download-pdf").href = `/api/report/${encodeURIComponent(result.report_id)}.pdf`;
+  document.querySelector("#download-pdf").href = `/api/report/${encodeURIComponent(result.report_id)}.pdf?format=sheet`;
+  document.querySelector("#download-full-pdf").href = `/api/report/${encodeURIComponent(result.report_id)}.pdf?format=full`;
   renderStats(result);
   renderSections(result.sections);
   renderChords(result.chords);
@@ -475,19 +508,22 @@ function renderResult(result) {
 }
 
 function renderStats(result) {
-  const bpm = result.tempo_bpm == null ? t("estimated_unknown") : `${formatNumber(result.tempo_bpm)} BPM`;
+  const bpm = result.tempo_bpm == null ? null : `${formatNumber(result.tempo_bpm)} BPM`;
   const selectedKey = currentOriginalKey();
   const targetKey = transposeKey(selectedKey, Number(transposeSelect.value));
-  document.querySelector("#song-sheet-meta").textContent = [
-    `${t("tempo_stat")}: ${bpm}`,
-    `${t("meter_stat")}: ${result.time_signature}`,
-    `${t("key_target")}: ${selectedKey || t("estimated_unknown")} → ${targetKey || t("estimated_unknown")}`,
-  ].join("  ·  ");
+  const metadata = [];
+  if (bpm) metadata.push(`${t("tempo_stat")}: ${bpm}`);
+  metadata.push(`${t("key_target")}: ${selectedKey || t("estimated_unknown")} → ${targetKey || t("estimated_unknown")}`);
+  if (Number(capoSelect.value)) {
+    metadata.push(`Capo ${capoSelect.value}`);
+  }
+  document.querySelector("#song-sheet-meta").textContent = metadata.join("  ·  ");
   const stats = [
     [t("length"), formatTime(result.duration)],
-    [t("tempo_stat"), bpm],
-    [t("meter_stat"), result.time_signature],
+    ...(bpm ? [[t("tempo_stat"), bpm]] : []),
+    [t("meter_stat"), result.time_signature || t("not_detected")],
     [t("key_target"), `${selectedKey || t("estimated_unknown")} → ${targetKey || t("estimated_unknown")}`],
+    [`Capo`, Number(capoSelect.value) ? `${capoSelect.value} ${t("fret")}` : t("no_capo")],
   ];
   const grid = document.querySelector("#stats-grid");
   grid.replaceChildren(...stats.map(([label, value]) => {
@@ -587,7 +623,10 @@ function renderTransposition() {
   pdfUrl.searchParams.set("capo", String(capo));
   pdfUrl.searchParams.set("original_key", originalKeySelect.value);
   pdfUrl.searchParams.set("lang", currentLanguage);
+  pdfUrl.searchParams.set("format", "sheet");
   document.querySelector("#download-pdf").href = pdfUrl.pathname + pdfUrl.search;
+  pdfUrl.searchParams.set("format", "full");
+  document.querySelector("#download-full-pdf").href = pdfUrl.pathname + pdfUrl.search;
 
   const shiftLabel = shift === 0 ? t("no_transposition") : `${shift > 0 ? "+" : ""}${shift} ${t("semitones")}`;
   const correctionLabel = correctedSemitones
@@ -616,18 +655,23 @@ function renderTransposition() {
 async function refreshAiStatus() {
   try {
     const response = await fetch("/api/ai-status");
+    if (!response.ok) throw new Error(t("ai_status_error"));
     const status = await response.json();
     aiEngines = status.engines || aiEngines;
     updateTranscribeAvailability();
+    return true;
   } catch {
     lyricsStatus.textContent = t("ai_status_error");
+    return false;
   }
 }
 
 function updateTranscribeAvailability() {
   const missingWhisper = !aiEngines.faster_whisper;
   const missingDemucs = separateVocalsCheckbox.checked && !aiEngines.demucs;
-  transcribeButton.disabled = !currentAnalysis || missingWhisper || missingDemucs;
+  transcribeButton.disabled = !currentAnalysis || missingWhisper || missingDemucs
+    || transcribeButton.classList.contains("loading");
+  if (currentLyrics.length || transcribeButton.classList.contains("loading")) return;
   if (missingWhisper || missingDemucs) {
     lyricsStatus.textContent = t("ai_install_missing");
   } else if (currentAnalysis) {
@@ -640,16 +684,26 @@ function updateTranscribeAvailability() {
 separateVocalsCheckbox.addEventListener("change", updateTranscribeAvailability);
 
 transcribeButton.addEventListener("click", async () => {
+  await transcribeLyrics();
+});
+
+async function transcribeLyrics() {
   if (!currentAnalysis || !fileInput.files?.[0]) return;
+  if (!aiEngines.faster_whisper) {
+    lyricsStatus.textContent = t("ai_install_missing");
+    lyricsSettings.open = true;
+    return;
+  }
+  const separateVocals = separateVocalsCheckbox.checked && aiEngines.demucs;
   const formData = new FormData();
   formData.append("audio", fileInput.files[0]);
   formData.append("report_id", currentAnalysis.report_id);
   formData.append("language", document.querySelector("#lyrics-language").value);
   formData.append("model_size", document.querySelector("#lyrics-model").value);
   formData.append("ui_language", currentLanguage);
-  if (separateVocalsCheckbox.checked) formData.append("separate_vocals", "on");
+  if (separateVocals) formData.append("separate_vocals", "on");
   setTranscribing(true);
-  lyricsStatus.textContent = separateVocalsCheckbox.checked
+  lyricsStatus.textContent = separateVocals
     ? t("transcribing_with_separation")
     : t("transcribing_only");
   errorMessage.hidden = true;
@@ -660,18 +714,23 @@ transcribeButton.addEventListener("click", async () => {
     currentLyrics = result.lyrics.map((line) => ({ ...line }));
     lyricsSettings.open = false;
     lyricsStatus.textContent = currentLyrics.length
-      ? t("transcription_note")
+      ? (separateVocals ? t("transcription_note") : t("transcription_note_without_separation"))
       : t("no_lyrics");
-    lyricsCorrection.hidden = !currentLyrics.length;
+    lyricsCorrection.hidden = false;
     saveLyricsButton.hidden = !currentLyrics.length;
     renderLyrics();
+    return true;
   } catch (error) {
-    lyricsStatus.textContent = "";
-    showError(error instanceof Error ? localizeError(error.message) : t("transcribe_error"));
+    lyricsStatus.textContent = error instanceof Error
+      ? localizeError(error.message)
+      : t("transcription_retry_error");
+    lyricsSettings.open = true;
+    showError(t("transcription_retry_error"));
+    return false;
   } finally {
     setTranscribing(false);
   }
-});
+}
 
 lyricsFile.addEventListener("change", async () => {
   const file = lyricsFile.files?.[0];
@@ -681,20 +740,85 @@ lyricsFile.addEventListener("change", async () => {
     lyricsFile.value = "";
     return;
   }
-  lyricsReference.value = await file.text();
+  lyricsReference.value = (await file.text()).replace(/^\uFEFF/, "");
+  updateLyricsImportPreview();
 });
 
+lyricsReference.addEventListener("input", updateLyricsImportPreview);
+
+function updateLyricsImportPreview() {
+  if (!currentAnalysis || !lyricsReference.value.trim()) {
+    lyricsCorrectionStatus.hidden = true;
+    return;
+  }
+  const parsed = parseLrcLyrics(lyricsReference.value, currentAnalysis.duration);
+  if (parsed.isLrc) {
+    const first = parsed.lines[0];
+    const last = parsed.lines[parsed.lines.length - 1];
+    lyricsCorrectionStatus.textContent = parsed.lines.length
+      ? t("lyrics_lrc_preview", {
+        count: parsed.lines.length,
+        first: formatTime(first.start),
+        last: formatTime(last.start),
+      })
+      : t("lyrics_lrc_invalid");
+  } else {
+    const count = lyricsReference.value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).length;
+    lyricsCorrectionStatus.textContent = t("lyrics_text_preview", { count });
+  }
+  lyricsCorrectionStatus.hidden = false;
+}
+
 document.querySelector("#apply-lyrics").addEventListener("click", () => {
-  const lines = lyricsReference.value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  if (lines.length !== currentLyrics.length) {
-    showError(t("lyrics_line_mismatch", { fileLines: lines.length, segments: currentLyrics.length }));
+  if (!currentAnalysis) return;
+  const imported = parseLrcLyrics(lyricsReference.value, currentAnalysis.duration);
+  if (imported.isLrc && !imported.lines.length) {
+    showError(t("lyrics_lrc_invalid"));
+    return;
+  }
+  const lines = imported.isLrc
+    ? imported.lines
+    : lyricsReference.value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (!lines.length) {
+    showError(t("lyrics_empty_import"));
     return;
   }
   errorMessage.hidden = true;
-  currentLyrics = currentLyrics.map((line, index) => ({ ...line, text: lines[index] }));
+  let statusKey;
+  if (imported.isLrc) {
+    currentLyrics = imported.lines;
+    statusKey = "lyrics_lrc_applied";
+  } else {
+    const starts = currentLyrics.map((line) => line.start).filter(Number.isFinite);
+    const ends = currentLyrics.map((line) => line.end).filter(Number.isFinite);
+    const start = starts.length ? Math.max(0, Math.min(...starts)) : 0;
+    const end = ends.length
+      ? Math.min(currentAnalysis.duration, Math.max(...ends))
+      : currentAnalysis.duration;
+    const useEstimatedTimestamps = lines.length !== currentLyrics.length || !currentLyrics.length;
+    const duration = Math.max(end - start, 0.1);
+    currentLyrics = lines.map((text, index) => {
+      const lineStart = useEstimatedTimestamps
+        ? start + duration * index / lines.length
+        : currentLyrics[index].start;
+      const lineEnd = useEstimatedTimestamps
+        ? start + duration * (index + 1) / lines.length
+        : currentLyrics[index].end;
+      return { start: lineStart, end: lineEnd, text };
+    });
+    statusKey = useEstimatedTimestamps ? "lyrics_line_mismatch" : "lyrics_applied";
+  }
   renderLyrics();
-  lyricsStatus.textContent = t("lyrics_applied");
+  const statusMessage = t(statusKey, { count: imported.dropped });
+  lyricsStatus.textContent = statusMessage;
+  lyricsCorrectionStatus.textContent = statusMessage;
+  lyricsCorrectionStatus.hidden = false;
+  lyricsCorrection.open = false;
+  lyricsCorrection.querySelector("summary").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  saveLyricsButton.hidden = !currentLyrics.length;
 });
+
+const { parseLrcLyrics } = ChordSectionsLrc;
 
 saveLyricsButton.addEventListener("click", async () => {
   if (!currentAnalysis) return;
@@ -708,6 +832,8 @@ saveLyricsButton.addEventListener("click", async () => {
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || t("save_error"));
     lyricsStatus.textContent = t("saved_lyrics", { count: result.saved });
+    lyricsCorrectionStatus.textContent = t("saved_lyrics", { count: result.saved });
+    lyricsCorrectionStatus.hidden = false;
   } catch (error) {
     showError(error instanceof Error ? localizeError(error.message) : t("save_error"));
   } finally {
@@ -717,99 +843,178 @@ saveLyricsButton.addEventListener("click", async () => {
 
 function renderLyrics() {
   lyricsEmpty.hidden = currentLyrics.length > 0;
-  if (!currentAnalysis || !currentLyrics.length) {
+  if (!currentAnalysis) {
     lyricsList.hidden = true;
     return;
   }
-  lyricsList.hidden = false;
-  lyricsList.replaceChildren(...currentLyrics.map((line, index) => {
-    const card = document.createElement("article");
-    card.className = "lyric-card";
-    const meta = document.createElement("div");
-    meta.className = "lyric-meta";
-    const seek = document.createElement("button");
-    seek.className = "time-link";
-    seek.type = "button";
-    seek.textContent = `${formatTime(line.start)} – ${formatTime(line.end)}  ▶`;
-    seek.addEventListener("click", () => {
-      audioPreview.currentTime = line.start;
-      audioPreview.play().catch(() => showError(t("playback_error")));
-    });
-    meta.append(seek);
-
-    const chordLine = document.createElement("div");
-    chordLine.className = "lyric-chord-line";
-    const events = chordEventsForLyrics(line);
-    if (!events.length) {
-      const noChord = document.createElement("span");
-      noChord.className = "lyric-chord-empty";
-      noChord.textContent = t("no_chord");
-      chordLine.append(noChord);
-    } else {
-      const duration = Math.max(line.end - line.start, 0.001);
-      events.forEach((event) => {
-        const soundingChord = transposedChord(event.chord);
-        const shape = transposeChord(soundingChord, -Number(capoSelect.value));
-        const marker = document.createElement("span");
-        const relativeStart = Math.max(0, event.start - line.start);
-        const position = Math.min(96, (relativeStart / duration) * 100);
-        marker.className = `lyric-chord-marker${position > 65 ? " tooltip-right" : ""}`;
-        marker.style.left = `${position}%`;
-        marker.append(createChordButton(soundingChord, shape));
-        chordLine.append(marker);
-      });
+  const lines = currentLyrics
+    .map((line, sourceIndex) => ({
+      ...line,
+      sourceIndex,
+      start: Math.max(0, line.start),
+      end: Math.min(currentAnalysis.duration, line.end),
+    }))
+    .filter((line) => Number.isFinite(line.start) && Number.isFinite(line.end) && line.end > line.start)
+    .sort((left, right) => left.start - right.start);
+  const items = [];
+  let cursor = 0;
+  for (const [lyricNumber, line] of lines.entries()) {
+    const gapStart = Math.max(cursor, 0);
+    if (line.start - gapStart >= 2) {
+      items.push({ type: "instrumental", start: gapStart, end: line.start });
     }
+    items.push({ type: "lyric", line, lyricNumber });
+    cursor = Math.max(cursor, line.end);
+  }
+  if (currentAnalysis.duration - cursor >= 2 || !lines.length) {
+    items.push({ type: "instrumental", start: cursor, end: currentAnalysis.duration });
+  }
 
-    const lyricText = document.createElement("p");
-    lyricText.className = "lyric-text";
-    lyricText.textContent = line.text;
+  lyricsList.hidden = items.length === 0;
+  lyricsList.replaceChildren(...items.map((item) => (
+    item.type === "lyric"
+      ? createLyricCard(item.line, item.lyricNumber)
+      : createInstrumentalCard(item)
+  )));
+  requestAnimationFrame(layoutChordMarkers);
+}
 
-    const editButton = document.createElement("button");
-    editButton.className = "lyric-edit-button";
-    editButton.type = "button";
-    editButton.textContent = t("edit_lyric");
+function createLyricCard(line, index) {
+  const card = document.createElement("article");
+  card.className = "lyric-card";
+  const meta = createLyricMeta(line);
+  const chordLine = document.createElement("div");
+  chordLine.className = "lyric-chord-line";
+  appendChordMarkers(chordLine, line);
 
-    const text = document.createElement("textarea");
-    text.rows = 2;
-    text.maxLength = 500;
-    text.value = line.text;
-    text.setAttribute("aria-label", t("lyric_line", { number: index + 1 }));
-    text.hidden = true;
-    text.addEventListener("input", () => {
-      currentLyrics[index] = { ...currentLyrics[index], text: text.value };
-      lyricText.textContent = text.value;
+  const lyricText = document.createElement("p");
+  lyricText.className = "lyric-text";
+  lyricText.textContent = line.text;
+
+  const editButton = document.createElement("button");
+  editButton.className = "lyric-edit-button";
+  editButton.type = "button";
+  editButton.textContent = t("edit_lyric");
+
+  const text = document.createElement("textarea");
+  text.rows = 2;
+  text.maxLength = 500;
+  text.value = line.text;
+  text.setAttribute("aria-label", t("lyric_line", { number: index + 1 }));
+  text.hidden = true;
+  text.addEventListener("input", () => {
+    currentLyrics[line.sourceIndex] = { ...currentLyrics[line.sourceIndex], text: text.value };
+    lyricText.textContent = text.value;
+  });
+  editButton.addEventListener("click", () => {
+    const editing = !text.hidden;
+    text.hidden = editing;
+    lyricText.hidden = !editing;
+    editButton.textContent = editing ? t("edit_lyric") : t("finish_editing");
+    if (!editing) text.focus();
+  });
+  card.append(meta, chordLine, lyricText, editButton, text);
+  return card;
+}
+
+function createInstrumentalCard(range) {
+  const card = document.createElement("article");
+  card.className = "lyric-card instrumental-card";
+  const meta = createLyricMeta(range);
+  const title = document.createElement("p");
+  title.className = "instrumental-label";
+  title.textContent = range.start === 0
+    ? t("instrumental_intro")
+    : range.end >= currentAnalysis.duration
+      ? t("instrumental_outro")
+      : t("instrumental_middle");
+  const chordLine = document.createElement("div");
+  chordLine.className = "lyric-chord-line";
+  appendChordMarkers(chordLine, range);
+  card.append(meta, title, chordLine);
+  return card;
+}
+
+function createLyricMeta(line) {
+  const meta = document.createElement("div");
+  meta.className = "lyric-meta";
+  const seek = document.createElement("button");
+  seek.className = "time-link";
+  seek.type = "button";
+  seek.textContent = `${formatTime(line.start)} – ${formatTime(line.end)}  ▶`;
+  seek.addEventListener("click", () => {
+    audioPreview.currentTime = line.start;
+    audioPreview.play().catch(() => showError(t("playback_error")));
+  });
+  meta.append(seek);
+  return meta;
+}
+
+function appendChordMarkers(chordLine, range) {
+  const events = chordEventsForLyrics(range);
+  if (!events.length) {
+    const noChord = document.createElement("span");
+    noChord.className = "lyric-chord-empty";
+    noChord.textContent = t("no_chord");
+    chordLine.append(noChord);
+    return;
+  }
+
+  const duration = Math.max(range.end - range.start, 0.001);
+  events.forEach((event) => {
+    const soundingChord = transposedChord(event.chord);
+    const shape = transposeChord(soundingChord, -Number(capoSelect.value));
+    const displayChord = Number(capoSelect.value) ? shape : soundingChord;
+    const marker = document.createElement("span");
+    const relativeStart = Math.max(0, event.start - range.start);
+    const position = Math.min(100, (relativeStart / duration) * 100);
+    marker.className = `lyric-chord-marker${position > 60 ? " tooltip-right" : ""}`;
+    marker.dataset.position = String(position);
+    marker.append(createChordButton(soundingChord, shape, displayChord));
+    chordLine.append(marker);
+  });
+}
+
+function layoutChordMarkers() {
+  document.querySelectorAll(".lyric-chord-line").forEach((line) => {
+    const width = line.clientWidth;
+    if (!width) return;
+    const laneEnds = [];
+    line.querySelectorAll(".lyric-chord-marker").forEach((marker) => {
+      const button = marker.querySelector(".lyric-chord");
+      const buttonWidth = button.getBoundingClientRect().width;
+      const desiredLeft = Number(marker.dataset.position) * width / 100;
+      const left = Math.max(0, Math.min(desiredLeft, width - buttonWidth));
+      let lane = laneEnds.findIndex((end) => left >= end + 4);
+      if (lane < 0) {
+        lane = laneEnds.length;
+        laneEnds.push(0);
+      }
+      marker.style.left = `${left}px`;
+      marker.style.top = `${lane * 24}px`;
+      laneEnds[lane] = left + buttonWidth;
     });
-    editButton.addEventListener("click", () => {
-      const editing = !text.hidden;
-      text.hidden = editing;
-      lyricText.hidden = !editing;
-      editButton.textContent = editing ? t("edit_lyric") : t("finish_editing");
-      if (!editing) text.focus();
-    });
-    card.append(meta, chordLine, lyricText, editButton, text);
-    return card;
-  }));
+    line.style.height = `${Math.max(31, laneEnds.length * 24)}px`;
+  });
 }
 
 function chordEventsForLyrics(line) {
   const events = currentAnalysis.chords
-    .filter((event) => event.end > line.start && event.start < line.end)
-    .map((event) => ({
-      ...event,
-      start: Math.max(event.start, line.start),
-      end: Math.min(event.end, line.end),
-    }));
+    .filter((event) => event.start >= line.start && event.start < line.end);
   return events.filter((event, index) => (
     index === 0 || event.chord !== events[index - 1].chord
   ));
 }
 
-function createChordButton(chord, shape) {
+function createChordButton(chord, shape, displayChord = chord) {
   const button = document.createElement("button");
   button.className = "lyric-chord";
   button.type = "button";
-  button.textContent = chord;
-  button.setAttribute("aria-label", `${chord} ${t("chord_diagram_title")}: ${shape}`);
+  button.textContent = displayChord;
+  button.setAttribute(
+    "aria-label",
+    `${displayChord}, ${t("sounds_like")} ${chord}; ${t("chord_diagram_title")}: ${shape}`,
+  );
   const tooltip = document.createElement("span");
   tooltip.className = "chord-tooltip";
   tooltip.setAttribute("role", "tooltip");
@@ -915,7 +1120,9 @@ function createChordDiagram(chord) {
 }
 
 function setTranscribing(loading) {
-  transcribeButton.disabled = loading || !currentAnalysis;
+  transcribeButton.disabled = loading || !currentAnalysis
+    || !aiEngines.faster_whisper
+    || (separateVocalsCheckbox.checked && !aiEngines.demucs);
   transcribeButton.classList.toggle("loading", loading);
   transcribeButton.querySelector(".button-label").textContent = loading
     ? t("transcribing_label")
@@ -1023,10 +1230,13 @@ function formatNumber(value) {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
-function setLoading(loading) {
+function setLoading(loading, stage = conversionStage) {
+  conversionStage = loading ? stage : null;
   analyzeButton.disabled = loading;
   analyzeButton.classList.toggle("loading", loading);
-  analyzeButton.querySelector(".button-label").textContent = loading ? t("analyzing_label") : t("analyze_song");
+  analyzeButton.querySelector(".button-label").textContent = loading
+    ? t(stage === "converting" ? "converting_label" : "analyzing_label")
+    : t("analyze_song");
 }
 
 function showError(message) {
@@ -1041,3 +1251,5 @@ window.addEventListener("beforeunload", () => {
 for (const select of [originalKeySelect, transposeSelect, capoSelect]) {
   select.addEventListener("change", renderTransposition);
 }
+
+window.addEventListener("resize", () => requestAnimationFrame(layoutChordMarkers));

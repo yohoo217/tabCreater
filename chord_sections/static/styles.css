@@ -258,6 +258,8 @@ input::placeholder { color: #a1aaa5; }
 .advanced-settings summary { color: #52635c; cursor: pointer; font-size: 12px; font-weight: 600; }
 .advanced-grid { padding-top: 2px; }
 .full-width { grid-column: 1 / -1; }
+.conversion-options { margin-top: 12px; }
+.conversion-options-help { grid-column: 1 / -1; margin-top: -3px; }
 
 .check-row {
   margin-top: 18px;
@@ -358,6 +360,7 @@ input::placeholder { color: #a1aaa5; }
 .result-header { margin-bottom: 18px; }
 .result-header h2 { max-width: 430px; overflow-wrap: anywhere; }
 .song-sheet-meta { margin: 7px 0 0; color: #78877f; font-size: 10px; line-height: 1.5; }
+.result-downloads { flex: 0 0 auto; display: grid; justify-items: end; gap: 7px; }
 .download-button {
   flex: 0 0 auto;
   padding: 10px 13px;
@@ -370,6 +373,7 @@ input::placeholder { color: #a1aaa5; }
 }
 .download-button:hover { background: var(--green-dark); }
 .download-button span { margin-left: 4px; font-size: 15px; }
+.full-report-download { display: inline-flex; margin-bottom: 14px; }
 .secondary-button {
   min-height: 36px;
   margin-top: 9px;
@@ -388,6 +392,7 @@ input::placeholder { color: #a1aaa5; }
 .audio-shift-help { display: inline-block; margin-left: 7px; }
 
 .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; }
+.result-stats { margin-bottom: 12px; }
 .transposition-panel {
   margin-top: 16px;
   padding: 14px;
@@ -395,8 +400,10 @@ input::placeholder { color: #a1aaa5; }
   border: 1px solid #e8eee8;
   border-radius: 10px;
 }
+.result-transposition-panel { margin-top: 0; margin-bottom: 20px; }
 .transposition-panel .section-title-row { margin-bottom: 4px; }
 .transposition-grid { align-items: end; }
+.result-transposition-panel .transposition-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .transposition-grid .field-label { margin-top: 9px; }
 .transpose-summary { grid-column: 1 / -1; margin: 0 0 2px; }
 .stat-card {
@@ -431,6 +438,7 @@ input::placeholder { color: #a1aaa5; }
 }
 .disclosure-content { padding: 0 0 14px; }
 .analysis-details .stats-grid { margin: 2px 0 14px; }
+.transposed-audio-tools { margin-top: 14px; }
 .lyrics-settings { margin-top: 10px; }
 .lyrics-settings .disclosure-content { padding-top: 2px; }
 .lyrics-empty {
@@ -504,7 +512,7 @@ input::placeholder { color: #a1aaa5; }
 }
 .lyric-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 7px 12px; }
 .lyric-meta .time-link { font-size: 10px; }
-.lyric-chord-line { position: relative; height: 31px; overflow: visible; }
+.lyric-chord-line { position: relative; min-height: 31px; overflow: visible; }
 .lyric-chord-marker { position: absolute; top: 0; z-index: 1; }
 .lyric-chord {
   position: relative;
@@ -560,6 +568,7 @@ input::placeholder { color: #a1aaa5; }
 .chord-finger-number { fill: white; font-family: sans-serif; font-size: 7px; font-weight: 700; text-anchor: middle; }
 .chord-fingering { max-width: 100%; color: #77837d; font-size: 9px; text-align: center; }
 .lyric-chord-empty { color: #9aa59f; font-size: 11px; }
+.instrumental-label { margin: 0; color: #77837d; font-size: 12px; font-weight: 600; }
 .lyric-text { margin: 0; color: var(--ink); font-size: 16px; line-height: 1.65; overflow-wrap: anywhere; }
 .lyric-edit-button { justify-self: start; padding: 0; color: #78877f; background: none; border: 0; font: inherit; font-size: 10px; cursor: pointer; }
 .lyric-edit-button:hover { color: var(--green); text-decoration: underline; }
@@ -581,7 +590,19 @@ tr:last-child td { border-bottom: 0; }
 .confidence-badge.medium { color: #8b6827; background: #faf3df; }
 .confidence-badge.low { color: #8b6254; background: #f6eeea; }
 
-footer { padding: 20px 0 0; color: #89958e; text-align: center; font-size: 10px; }
+footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 7px 12px;
+  padding: 20px 0 0;
+  color: #89958e;
+  text-align: center;
+  font-size: 10px;
+}
+.feedback-link { color: var(--green); font-weight: 600; }
+.feedback-link:hover { color: var(--green-dark); text-decoration: underline; }
+.app-version { color: #a1aaa5; font-variant-numeric: tabular-nums; }
 
 @media (max-width: 900px) {
   .layout { padding-top: 36px; }
@@ -599,9 +620,11 @@ footer { padding: 20px 0 0; color: #89958e; text-align: center; font-size: 10px;
   .results-panel { min-height: 400px; }
   .results-empty { min-height: 350px; }
   .result-header { align-items: flex-start; }
+  .result-downloads { justify-items: start; }
   .result-header h2 { font-size: 17px; }
   .section-title-row { align-items: flex-start; }
   .section-title-row > span { text-align: right; }
+  .result-transposition-panel .transposition-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (prefers-reduced-motion: reduce) {

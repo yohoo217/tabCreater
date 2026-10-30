@@ -1,0 +1,49 @@
+name: Feedback
+description: Report a problem, alignment issue, or improvement idea for Chord Sections.
+title: "[Feedback]: "
+body:
+  - type: dropdown
+    id: category
+    attributes:
+      label: Feedback type
+      options:
+        - Incorrect chord or lyric alignment
+        - Import or export problem
+        - Audio analysis problem
+        - Improvement idea
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Include the expected result and the actual result. Do not attach audio you do not have permission to share.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start the local app
+        2. Select an audio file
+        3. Import or convert
+        4. Describe the result
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      description: Shown in the footer, for example v0.2.0.
+  - type: dropdown
+    id: operating_system
+    attributes:
+      label: Operating system
+      options:
+        - macOS
+        - Windows
+        - Linux
+        - Other
+  - type: markdown
+    attributes:
+      value: Thank you. Please remove personal information and copyrighted audio before submitting.

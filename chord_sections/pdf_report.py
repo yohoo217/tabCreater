@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from io import BytesIO
+from pathlib import Path
 from typing import Callable
 
 from reportlab.lib import colors
@@ -9,7 +10,10 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (
+    Flowable,
+    KeepTogether,
     LongTable,
     Paragraph,
     SimpleDocTemplate,
@@ -25,11 +29,76 @@ from chord_sections.report import _format_time
 
 
 FONT_NAME = "MSung-Light"
+EMBEDDED_FONT_NAME = "ChordSections-CJK"
+CJK_FONT_PATHS = (
+    Path("/System/Library/Fonts/STHeiti Medium.ttc"),
+    Path("/System/Library/Fonts/STHeiti Light.ttc"),
+    Path("/System/Library/Fonts/PingFang.ttc"),
+    Path("C:/Windows/Fonts/msjh.ttc"),
+    Path("C:/Windows/Fonts/mingliu.ttc"),
+    Path("C:/Windows/Fonts/msyh.ttc"),
+    Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
+    Path("/usr/share/fonts/opentype/noto/NotoSansCJKtc-Regular.otf"),
+    Path("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc"),
+    Path("/usr/share/fonts/truetype/noto/NotoSansTC-Regular.ttf"),
+    Path("/usr/share/fonts/truetype/arphic/ukai.ttc"),
+)
 
 
-def _register_font() -> None:
+def _register_font() -> str:
+    if EMBEDDED_FONT_NAME in pdfmetrics.getRegisteredFontNames():
+        return EMBEDDED_FONT_NAME
+    for path in CJK_FONT_PATHS:
+        if path.is_file():
+            pdfmetrics.registerFont(TTFont(EMBEDDED_FONT_NAME, str(path), subfontIndex=0))
+            return EMBEDDED_FONT_NAME
     if FONT_NAME not in pdfmetrics.getRegisteredFontNames():
         pdfmetrics.registerFont(UnicodeCIDFont(FONT_NAME))
+    return FONT_NAME
+
+
+class ChordLine(Flowable):
+    def __init__(
+        self,
+        chords: list[tuple[str, float]],
+        font_name: str,
+    ) -> None:
+        super().__init__()
+        self.chords = chords
+        self.font_name = font_name
+        self.height = 18
+
+    def wrap(self, available_width: float, _available_height: float) -> tuple[float, float]:
+        self.width = available_width
+        return self.width, self.height
+
+    def draw(self) -> None:
+        chords = self.chords or [("N.C.", 0)]
+        font_size = 10
+        gap = 9
+        widths = [pdfmetrics.stringWidth(chord, self.font_name, font_size) for chord, _ in chords]
+        if sum(widths) + gap * (len(chords) - 1) > self.width:
+            font_size = max(7, font_size * self.width / (sum(widths) + gap * (len(chords) - 1)))
+            widths = [pdfmetrics.stringWidth(chord, self.font_name, font_size) for chord, _ in chords]
+
+        positions = [
+            min(max(0, ratio * max(0, self.width - width)), self.width - width)
+            for width, (_chord, ratio) in zip(widths, chords)
+        ]
+        if any(
+            positions[index] < positions[index - 1] + widths[index - 1] + gap
+            for index in range(1, len(chords))
+        ):
+            step = max(0, (self.width - sum(widths)) / max(1, len(chords) - 1))
+            positions = [
+                sum(widths[:index]) + step * index
+                for index in range(len(chords))
+            ]
+
+        self.canv.setFont(self.font_name, font_size)
+        self.canv.setFillColor(colors.HexColor("#2a6856"))
+        for (chord, _ratio), x in zip(chords, positions):
+            self.canv.drawString(x, 2, chord)
 
 
 def render_pdf(
@@ -41,10 +110,11 @@ def render_pdf(
     original_key: str | None = None,
     lyrics: tuple[LyricLine, ...] = (),
     language: str = "zh",
+    song_sheet: bool = False,
 ) -> bytes:
     if language not in {"zh", "en"}:
         raise ValueError("language must be 'zh' or 'en'.")
-    _register_font()
+    font_name = _register_font()
     correction = _key_correction(result.estimated_key, original_key)
     effective_original_key = original_key or result.estimated_key
     target_key = transpose_key(effective_original_key, semitones)
@@ -55,7 +125,7 @@ def render_pdf(
         pagesize=A4,
         rightMargin=42,
         leftMargin=42,
-        topMargin=46,
+        topMargin=52 if song_sheet else 46,
         bottomMargin=44,
         title=title,
         author="Chord Sections",
@@ -65,7 +135,7 @@ def render_pdf(
         ParagraphStyle(
             name="CJKTitle",
             parent=styles["Title"],
-            fontName=FONT_NAME,
+            fontName=font_name,
             fontSize=22,
             leading=28,
             textColor=colors.HexColor("#183b35"),
@@ -77,7 +147,7 @@ def render_pdf(
         ParagraphStyle(
             name="LyricSheetCell",
             parent=styles["BodyText"],
-            fontName=FONT_NAME,
+            fontName=font_name,
             fontSize=10,
             leading=15,
             textColor=colors.HexColor("#364641"),
@@ -85,9 +155,27 @@ def render_pdf(
     )
     styles.add(
         ParagraphStyle(
+            name="SongSheetTitle",
+            parent=styles["CJKTitle"],
+            fontSize=21,
+            leading=27,
+        )
+    )
+    styles.add(
+        ParagraphStyle(
+            name="SongSheetLyric",
+            parent=styles["BodyText"],
+            fontName=font_name,
+            fontSize=12,
+            leading=18,
+            textColor=colors.HexColor("#364641"),
+        )
+    )
+    styles.add(
+        ParagraphStyle(
             name="CJKHeading",
             parent=styles["Heading2"],
-            fontName=FONT_NAME,
+            fontName=font_name,
             fontSize=14,
             leading=19,
             textColor=colors.HexColor("#183b35"),
@@ -99,7 +187,7 @@ def render_pdf(
         ParagraphStyle(
             name="CJKBody",
             parent=styles["BodyText"],
-            fontName=FONT_NAME,
+            fontName=font_name,
             fontSize=9,
             leading=14,
             textColor=colors.HexColor("#364641"),
@@ -109,7 +197,7 @@ def render_pdf(
         ParagraphStyle(
             name="CJKSmall",
             parent=styles["BodyText"],
-            fontName=FONT_NAME,
+            fontName=font_name,
             fontSize=8,
             leading=11,
             textColor=colors.HexColor("#53645f"),
@@ -119,7 +207,7 @@ def render_pdf(
         ParagraphStyle(
             name="ChordCell",
             parent=styles["BodyText"],
-            fontName=FONT_NAME,
+            fontName=font_name,
             fontSize=8,
             leading=11,
             alignment=TA_LEFT,
@@ -129,26 +217,32 @@ def render_pdf(
         ParagraphStyle(
             name="TableHeaderCJK",
             parent=styles["BodyText"],
-            fontName=FONT_NAME,
+            fontName=font_name,
             fontSize=8,
             leading=10,
             textColor=colors.white,
         )
     )
 
-    bpm = f"{result.tempo_bpm:g} BPM" if result.tempo_bpm is not None else _text(language, "unknown")
     key = effective_original_key or _text(language, "unknown")
     target_key_label = target_key or _text(language, "unknown")
     capo_label = f"Capo {capo_fret}" if capo_fret else _text(language, "no_capo")
     transposition_label = f"{semitones:+d} {_text(language, 'semitones')}" if semitones else _text(language, "original_key")
+    song_details = [
+        f"{_text(language, 'duration')}：{_format_time(result.duration)}",
+    ]
+    if result.tempo_bpm is not None:
+        song_details.append(f"{_text(language, 'tempo')}：{result.tempo_bpm:g} BPM")
+    song_details.extend(
+        [
+            f"{_text(language, 'original_key')}：{key}",
+            f"{_text(language, 'target_key')}：{target_key_label}",
+        ]
+    )
     story = [
         Paragraph(_escape(title), styles["CJKTitle"]),
         Paragraph(
-            f"{_text(language, 'duration')}：{_format_time(result.duration)}　｜　"
-            f"{_text(language, 'tempo')}：{bpm}　｜　"
-            f"{_text(language, 'meter')}：{result.time_signature_numerator}/{result.time_signature_denominator}　｜　"
-            f"{_text(language, 'original_key')}：{key}　｜　"
-            f"{_text(language, 'target_key')}：{target_key_label}",
+            "　｜　".join(song_details),
             styles["CJKBody"],
         ),
         Paragraph(
@@ -171,7 +265,29 @@ def render_pdf(
             transformed = transform(chord)
             if not chords or chords[-1] != transformed:
                 chords.append(transformed)
-        return " → ".join(chords) or "N.C."
+        return "  |  ".join(chords) or "N.C."
+
+    if song_sheet:
+        story = [
+            Paragraph(_escape(title), styles["SongSheetTitle"]),
+            Spacer(1, 10),
+        ]
+        for line in lyrics:
+            chord_line = ChordLine(
+                _chord_positions_for_lyrics(line, result, transform),
+                font_name,
+            )
+            lyric = Paragraph(
+                _escape(line.text).replace("\n", "<br/>"),
+                styles["SongSheetLyric"],
+            )
+            story.append(KeepTogether([chord_line, lyric, Spacer(1, 17)]))
+        document.build(
+            story,
+            onFirstPage=lambda canvas, doc: _draw_page_number(canvas, doc, font_name, title),
+            onLaterPages=lambda canvas, doc: _draw_page_number(canvas, doc, font_name, title),
+        )
+        return output.getvalue()
 
     if lyrics:
         story.append(Paragraph(_text(language, "lyrics_chords"), styles["CJKHeading"]))
@@ -201,7 +317,7 @@ def render_pdf(
                 ]
             )
         lyric_table = LongTable(lyric_rows, colWidths=(80, 430), repeatRows=1)
-        lyric_table.setStyle(_table_style())
+        lyric_table.setStyle(_table_style(font_name))
         story.append(lyric_table)
     if result.sections:
         story.extend(
@@ -225,7 +341,7 @@ def render_pdf(
                 ]
             )
         sections_table = Table(section_rows, colWidths=(48, 132, 330), repeatRows=1)
-        sections_table.setStyle(_table_style())
+        sections_table.setStyle(_table_style(font_name))
         story.append(sections_table)
     story.extend(
         [
@@ -265,10 +381,14 @@ def render_pdf(
             ]
         )
     chord_table = LongTable(chord_rows, colWidths=(61, 61, 57, 57, 70, 72, 45), repeatRows=1)
-    chord_table.setStyle(_table_style())
+    chord_table.setStyle(_table_style(font_name))
     story.append(chord_table)
 
-    document.build(story, onFirstPage=_draw_page_number, onLaterPages=_draw_page_number)
+    document.build(
+        story,
+        onFirstPage=lambda canvas, doc: _draw_page_number(canvas, doc, font_name),
+        onLaterPages=lambda canvas, doc: _draw_page_number(canvas, doc, font_name),
+    )
     return output.getvalue()
 
 
@@ -277,16 +397,26 @@ def _chords_for_lyrics(
     result: AnalysisResult,
     transform: Callable[[str], str],
 ) -> str:
-    chords = [
-        transform(event.chord)
-        for event in result.chords
-        if event.end > line.start and event.start < line.end
-    ]
-    distinct: list[str] = []
-    for chord in chords:
-        if not distinct or distinct[-1] != chord:
-            distinct.append(chord)
-    return " → ".join(distinct) or "N.C."
+    chords = _chord_positions_for_lyrics(line, result, transform)
+    return "  |  ".join(chord for chord, _position in chords) or "N.C."
+
+
+def _chord_positions_for_lyrics(
+    line: LyricLine,
+    result: AnalysisResult,
+    transform: Callable[[str], str],
+) -> list[tuple[str, float]]:
+    duration = max(line.end - line.start, 0.001)
+    chords: list[tuple[str, float]] = []
+    for event in result.chords:
+        if event.start < line.start or event.start >= line.end:
+            continue
+        chord = transform(event.chord)
+        if chords and chord == chords[-1][0]:
+            continue
+        position = min(1, max(0, (event.start - line.start) / duration))
+        chords.append((chord, position))
+    return chords
 
 
 def _text(language: str, key: str) -> str:
@@ -364,12 +494,12 @@ def _key_correction(estimated_key: str | None, selected_key: str | None) -> int:
     return correction - 12 if correction > 6 else correction
 
 
-def _table_style() -> TableStyle:
+def _table_style(font_name: str) -> TableStyle:
     return TableStyle(
         [
             ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#183b35")),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("FONTNAME", (0, 0), (-1, -1), FONT_NAME),
+            ("FONTNAME", (0, 0), (-1, -1), font_name),
             ("FONTSIZE", (0, 0), (-1, -1), 8),
             ("LEADING", (0, 0), (-1, -1), 11),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
@@ -395,9 +525,11 @@ def _escape(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-def _draw_page_number(canvas, document) -> None:
+def _draw_page_number(canvas, document, font_name: str, title: str | None = None) -> None:
     canvas.saveState()
-    canvas.setFont(FONT_NAME, 8)
+    canvas.setFont(font_name, 8)
     canvas.setFillColor(colors.HexColor("#71807a"))
+    if title and document.page > 1:
+        canvas.drawString(document.leftMargin, A4[1] - 30, title)
     canvas.drawRightString(A4[0] - 42, 24, f"{document.page}")
     canvas.restoreState()
