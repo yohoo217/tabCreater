@@ -411,6 +411,40 @@ input::placeholder { color: #a1aaa5; }
 .stat-card strong { overflow: hidden; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
 .confidence-explainer { margin: 10px 0 0; color: #8b9690; font-size: 10px; }
 .result-section { margin-top: 27px; }
+.result-disclosure {
+  margin-top: 16px;
+  padding: 0 14px;
+  background: #f7f9f6;
+  border: 1px solid #e8eee8;
+  border-radius: 10px;
+}
+.result-disclosure > summary {
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  color: #52635c;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+  list-style-position: inside;
+}
+.disclosure-content { padding: 0 0 14px; }
+.analysis-details .stats-grid { margin: 2px 0 14px; }
+.lyrics-settings { margin-top: 10px; }
+.lyrics-settings .disclosure-content { padding-top: 2px; }
+.lyrics-empty {
+  margin: 0;
+  padding: 20px;
+  color: #77837d;
+  background: #f7f9f6;
+  border: 1px dashed #d4dfd6;
+  border-radius: 10px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.lyrics-empty p { margin: 0 auto; max-width: 430px; }
+.lyrics-empty .secondary-button { margin-top: 12px; }
 .section-title-row { margin-bottom: 11px; }
 .section-title-row h3 { margin: 0; font-size: 13px; }
 .section-title-row > span { color: #8b9690; font-size: 10px; }
@@ -460,16 +494,26 @@ input::placeholder { color: #a1aaa5; }
 .lyrics-correction > .secondary-button { display: block; }
 .lyrics-list { margin-top: 12px; display: grid; gap: 8px; }
 .lyric-card {
-  padding: 10px;
+  padding: 14px 16px;
   display: grid;
-  gap: 7px;
-  background: #fbfcfa;
-  border: 1px solid #e8ede8;
-  border-radius: 8px;
+  gap: 9px;
+  background: #fff;
+  border: 1px solid #e4ebe4;
+  border-radius: 10px;
 }
-.lyric-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 5px 12px; }
+.lyric-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 7px 12px; }
 .lyric-meta .time-link { font-size: 10px; }
-.lyric-chords { color: var(--green); font-size: 10px; font-weight: 700; }
+.lyric-chords {
+  padding: 4px 8px;
+  color: var(--green-dark);
+  background: var(--green-soft);
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 750;
+}
+.lyric-text { margin: 0; color: var(--ink); font-size: 16px; line-height: 1.65; overflow-wrap: anywhere; }
+.lyric-edit-button { justify-self: start; padding: 0; color: #78877f; background: none; border: 0; font: inherit; font-size: 10px; cursor: pointer; }
+.lyric-edit-button:hover { color: var(--green); text-decoration: underline; }
 .lyrics-section > .secondary-button { min-width: 130px; }
 .timeline-section { margin-top: 28px; }
 .table-wrap { max-height: 460px; overflow: auto; border: 1px solid #e8ede8; border-radius: 8px; }

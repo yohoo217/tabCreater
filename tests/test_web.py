@@ -21,6 +21,9 @@ class WebInterfaceTests(unittest.TestCase):
         self.assertIn("和弦整理室".encode(), response.data)
         self.assertIn(b'id="language-toggle"', response.data)
         self.assertIn(b'data-i18n="hero_title"', response.data)
+        self.assertIn(b'data-i18n="lyrics_title"', response.data)
+        self.assertIn(b'id="lyrics-settings"', response.data)
+        self.assertIn(b'id="analysis-details"', response.data)
 
     def test_rejects_unsupported_audio_format(self) -> None:
         response = self.client.post(

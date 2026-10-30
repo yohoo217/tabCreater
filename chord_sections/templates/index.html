@@ -146,7 +146,7 @@
             </div>
             <p class="step-label">STEP 02</p>
             <h2 id="results-title" data-i18n="results_empty_title">分析結果會在這裡</h2>
-            <p data-i18n="results_empty_copy">選擇歌曲後，會看到拍速、調性、段落摘要和可回聽的和弦時間軸。</p>
+            <p data-i18n="results_empty_copy">選擇歌曲後，分析結果會顯示在這裡。</p>
           </div>
 
           <div id="results-content" hidden>
@@ -157,77 +157,48 @@
               </div>
               <a id="download-pdf" class="download-button" href="#" aria-label="下載 PDF" data-i18n-aria-label="download_pdf"><span data-i18n="download_pdf">下載 PDF</span> <span>↓</span></a>
             </div>
-            <div class="stats-grid" id="stats-grid"></div>
-            <div class="transposition-panel">
-              <div class="section-title-row">
-                <h3 data-i18n="transposition_title">調性、移調與 Capo</h3>
-                <span data-i18n="transposition_subtitle">和弦譜或另存移調後音檔</span>
-              </div>
-              <div class="field-grid transposition-grid">
-                <div>
-                  <label class="field-label" for="original-key" data-i18n="original_key">原調校正</label>
-                  <select id="original-key" aria-label="原調校正" data-i18n-aria-label="original_key">
-                    <option value="auto" data-i18n="use_estimate">使用自動估計</option>
-                  </select>
-                </div>
-                <div>
-                  <label class="field-label" for="transpose-semitones" data-i18n="target_transposition">目標移調</label>
-                  <select id="transpose-semitones" aria-label="目標移調" data-i18n-aria-label="target_transposition"></select>
-                </div>
-                <div>
-                  <label class="field-label" for="capo-fret" data-i18n="capo_position">Capo 位置</label>
-                  <select id="capo-fret" aria-label="Capo 位置" data-i18n-aria-label="capo_position"></select>
-                </div>
-                <p id="transpose-summary" class="field-help transpose-summary"></p>
-              </div>
-              <button id="download-transposed-audio" class="secondary-button" type="button" disabled>
-                <span data-i18n="download_transposed_wav">下載移調後 WAV</span>
-              </button>
-              <p class="field-help audio-shift-help" data-i18n="audio_shift_help">這會另存一份 WAV，不會覆寫原檔；原音檔播放器保持不變。</p>
-            </div>
-            <p class="confidence-explainer" data-i18n="confidence_explainer">信心分數為啟發式參考，不代表真實辨識準確率。</p>
-
-            <section class="result-section">
-              <div class="section-title-row">
-                <h3 data-i18n="section_chords">段落和弦</h3>
-                <span data-i18n="section_subtitle">相似段落使用相同標記</span>
-              </div>
-              <div id="section-list" class="section-list"></div>
-            </section>
-
             <section class="result-section lyrics-section" aria-labelledby="lyrics-title">
               <div class="section-title-row">
-                <h3 id="lyrics-title" data-i18n="lyrics_title">人聲歌詞與和弦對齊</h3>
+                <h3 id="lyrics-title" data-i18n="lyrics_title">歌詞搭配和弦</h3>
                 <span data-i18n="lyrics_subtitle">辨識結果可修改，時間以音檔為準</span>
               </div>
-              <p class="lyrics-intro">
-                <span data-i18n="lyrics_intro">本機分離人聲並辨識歌詞。首次執行會從 Hugging Face 下載所選模型；Small 約 484 MB，Base 約 145 MB。
-                歌唱辨識可能漏字或聽錯，請回聽校對。</span>
-              </p>
-              <div class="lyrics-controls">
-                <label class="field-label" for="lyrics-language" data-i18n="recognition_language">辨識語言</label>
-                <select id="lyrics-language">
-                  <option value="auto" selected data-i18n="auto_detect">自動偵測</option>
-                  <option value="zh">中文</option>
-                  <option value="en">英文</option>
-                  <option value="ja">日文</option>
-                  <option value="ko">韓文</option>
-                </select>
-                <label class="field-label" for="lyrics-model" data-i18n="model">模型</label>
-                <select id="lyrics-model">
-                  <option value="small" selected data-i18n="model_small">Small（建議，約 484 MB）</option>
-                  <option value="base" data-i18n="model_base">Base（較小，約 145 MB）</option>
-                </select>
-                <label class="check-row lyrics-separation" for="separate-vocals">
-                  <input id="separate-vocals" type="checkbox" checked>
-                  <span><strong data-i18n="separate_vocals">先分離人聲</strong><small data-i18n="separate_vocals_help">建議開啟；首次使用會另外下載 Demucs 模型約 84 MB。</small></span>
-                </label>
-                <button id="transcribe-button" class="primary-button" type="button" disabled>
-                  <span class="button-label" data-i18n="transcribe_button">分離人聲並辨識歌詞</span>
-                  <span class="button-spinner" aria-hidden="true"></span>
-                </button>
-                <p id="lyrics-status" class="field-help" role="status" data-i18n="checking_models">檢查本機歌詞模型…</p>
+              <div id="lyrics-empty" class="lyrics-empty">
+                <p data-i18n="song_sheet_empty">尚未產生歌詞和弦譜。展開歌詞辨識設定，開始分離人聲並辨識歌詞。</p>
+                <button id="open-lyrics-settings" class="secondary-button" type="button" data-i18n="open_lyrics_settings">開啟歌詞辨識設定</button>
               </div>
+              <details class="result-disclosure lyrics-settings" id="lyrics-settings">
+                <summary data-i18n="lyrics_settings">歌詞辨識設定</summary>
+                <div class="disclosure-content">
+                  <p class="lyrics-intro">
+                    <span data-i18n="lyrics_intro">本機分離人聲並辨識歌詞。首次執行會從 Hugging Face 下載所選模型；Small 約 484 MB，Base 約 145 MB。
+                    歌唱辨識可能漏字或聽錯，請回聽校對。</span>
+                  </p>
+                  <div class="lyrics-controls">
+                    <label class="field-label" for="lyrics-language" data-i18n="recognition_language">辨識語言</label>
+                    <select id="lyrics-language">
+                      <option value="auto" selected data-i18n="auto_detect">自動偵測</option>
+                      <option value="zh">中文</option>
+                      <option value="en">英文</option>
+                      <option value="ja">日文</option>
+                      <option value="ko">韓文</option>
+                    </select>
+                    <label class="field-label" for="lyrics-model" data-i18n="model">模型</label>
+                    <select id="lyrics-model">
+                      <option value="small" selected data-i18n="model_small">Small（建議，約 484 MB）</option>
+                      <option value="base" data-i18n="model_base">Base（較小，約 145 MB）</option>
+                    </select>
+                    <label class="check-row lyrics-separation" for="separate-vocals">
+                      <input id="separate-vocals" type="checkbox" checked>
+                      <span><strong data-i18n="separate_vocals">先分離人聲</strong><small data-i18n="separate_vocals_help">建議開啟；首次使用會另外下載 Demucs 模型約 84 MB。</small></span>
+                    </label>
+                    <button id="transcribe-button" class="primary-button" type="button" disabled>
+                      <span class="button-label" data-i18n="transcribe_button">分離人聲並辨識歌詞</span>
+                      <span class="button-spinner" aria-hidden="true"></span>
+                    </button>
+                    <p id="lyrics-status" class="field-help" role="status" data-i18n="checking_models">檢查本機歌詞模型…</p>
+                  </div>
+                </div>
+              </details>
 
               <details class="lyrics-correction" id="lyrics-correction" hidden>
                 <summary data-i18n="import_lyrics">匯入文字歌詞校正（每行需對應一條辨識結果）</summary>
@@ -241,20 +212,61 @@
               <button id="save-lyrics" class="secondary-button" type="button" hidden data-i18n="save_lyrics">儲存歌詞到 PDF</button>
             </section>
 
-            <section class="result-section timeline-section">
-              <div class="section-title-row">
-                <h3 data-i18n="chord_timeline">和弦時間軸</h3>
-                <span data-i18n="timeline_help">點選時間可跳轉聆聽</span>
+            <details class="result-disclosure analysis-details" id="analysis-details">
+              <summary data-i18n="more_analysis">更多分析結果與設定</summary>
+              <div class="disclosure-content">
+                <div class="stats-grid" id="stats-grid"></div>
+                <div class="transposition-panel">
+                  <div class="section-title-row">
+                    <h3 data-i18n="transposition_title">調性、移調與 Capo</h3>
+                    <span data-i18n="transposition_subtitle">和弦譜或另存移調後音檔</span>
+                  </div>
+                  <div class="field-grid transposition-grid">
+                    <div>
+                      <label class="field-label" for="original-key" data-i18n="original_key">原調校正</label>
+                      <select id="original-key" aria-label="原調校正" data-i18n-aria-label="original_key">
+                        <option value="auto" data-i18n="use_estimate">使用自動估計</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label class="field-label" for="transpose-semitones" data-i18n="target_transposition">目標移調</label>
+                      <select id="transpose-semitones" aria-label="目標移調" data-i18n-aria-label="target_transposition"></select>
+                    </div>
+                    <div>
+                      <label class="field-label" for="capo-fret" data-i18n="capo_position">Capo 位置</label>
+                      <select id="capo-fret" aria-label="Capo 位置" data-i18n-aria-label="capo_position"></select>
+                    </div>
+                    <p id="transpose-summary" class="field-help transpose-summary"></p>
+                  </div>
+                  <button id="download-transposed-audio" class="secondary-button" type="button" disabled>
+                    <span data-i18n="download_transposed_wav">下載移調後 WAV</span>
+                  </button>
+                  <p class="field-help audio-shift-help" data-i18n="audio_shift_help">這會另存一份 WAV，不會覆寫原檔；原音檔播放器保持不變。</p>
+                </div>
+                <p class="confidence-explainer" data-i18n="confidence_explainer">信心分數為啟發式參考，不代表真實辨識準確率。</p>
+                <section class="result-section">
+                  <div class="section-title-row">
+                    <h3 data-i18n="section_chords">段落和弦</h3>
+                    <span data-i18n="section_subtitle">相似段落使用相同標記</span>
+                  </div>
+                  <div id="section-list" class="section-list"></div>
+                </section>
+                <section class="result-section timeline-section">
+                  <div class="section-title-row">
+                    <h3 data-i18n="chord_timeline">和弦時間軸</h3>
+                    <span data-i18n="timeline_help">點選時間可跳轉聆聽</span>
+                  </div>
+                  <div class="table-wrap">
+                    <table>
+                      <thead>
+                        <tr><th data-i18n="start">開始</th><th data-i18n="end">結束</th><th data-i18n="original_chord">原曲和弦</th><th data-i18n="transposed">移調後</th><th data-i18n="capo_shape">Capo 指型</th><th data-i18n="confidence">信心</th></tr>
+                      </thead>
+                      <tbody id="chord-rows"></tbody>
+                    </table>
+                  </div>
+                </section>
               </div>
-              <div class="table-wrap">
-                <table>
-                  <thead>
-                    <tr><th data-i18n="start">開始</th><th data-i18n="end">結束</th><th data-i18n="original_chord">原曲和弦</th><th data-i18n="transposed">移調後</th><th data-i18n="capo_shape">Capo 指型</th><th data-i18n="confidence">信心</th></tr>
-                  </thead>
-                  <tbody id="chord-rows"></tbody>
-                </table>
-              </div>
-            </section>
+            </details>
           </div>
         </section>
       </div>

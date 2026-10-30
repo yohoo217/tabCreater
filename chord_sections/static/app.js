@@ -20,6 +20,8 @@ const lyricsReference = document.querySelector("#lyrics-reference");
 const lyricsFile = document.querySelector("#lyrics-file");
 const separateVocalsCheckbox = document.querySelector("#separate-vocals");
 const languageToggle = document.querySelector("#language-toggle");
+const lyricsEmpty = document.querySelector("#lyrics-empty");
+const lyricsSettings = document.querySelector("#lyrics-settings");
 
 let currentObjectUrl = null;
 let currentAnalysis = null;
@@ -69,7 +71,7 @@ const translations = {
     confidence_title: "關於信心分數",
     confidence_note: "它是模型符合度與候選差距的啟發式指標，不是準確率。不要只為了分數變高而更改 BPM 或拍號。",
     results_empty_title: "分析結果會在這裡",
-    results_empty_copy: "選擇歌曲後，會看到拍速、調性、段落摘要和可回聽的和弦時間軸。",
+    results_empty_copy: "選擇歌曲並分析後，主要結果會以歌詞搭配和弦的方式呈現。",
     download_pdf: "下載 PDF",
     transposition_title: "調性、移調與 Capo",
     transposition_subtitle: "和弦譜或另存移調後音檔",
@@ -82,8 +84,16 @@ const translations = {
     confidence_explainer: "信心分數為啟發式參考，不代表真實辨識準確率。",
     section_chords: "段落和弦",
     section_subtitle: "相似段落使用相同標記",
-    lyrics_title: "人聲歌詞與和弦對齊",
+    lyrics_title: "歌詞搭配和弦",
     lyrics_subtitle: "辨識結果可修改，時間以音檔為準",
+    lyrics_settings: "歌詞辨識設定",
+    open_lyrics_settings: "開啟歌詞辨識設定",
+    more_analysis: "更多分析結果與設定",
+    song_sheet_empty: "尚未產生歌詞和弦譜。展開歌詞辨識設定，開始分離人聲並辨識歌詞。",
+    lyrics_settings: "歌詞辨識設定",
+    open_lyrics_settings: "開啟歌詞辨識設定",
+    more_analysis: "更多分析結果與設定",
+    song_sheet_empty: "尚未產生歌詞和弦譜。展開歌詞辨識設定，開始分離人聲並辨識歌詞。",
     lyrics_intro: "本機分離人聲並辨識歌詞。首次執行會從 Hugging Face 下載所選模型；Small 約 484 MB，Base 約 145 MB。歌唱辨識可能漏字或聽錯，請回聽校對。",
     recognition_language: "辨識語言",
     auto_detect: "自動偵測",
@@ -147,6 +157,8 @@ const translations = {
     save_error: "無法儲存歌詞。",
     saved_lyrics: "已儲存 {count} 行歌詞；下載 PDF 即包含歌詞和和弦。",
     lyric_line: "歌詞第 {number} 行",
+    edit_lyric: "編輯歌詞",
+    finish_editing: "完成",
     transcribing_label: "正在分離與辨識…",
     transposed_generating: "正在產生 WAV…",
     transposed_error: "無法產生移調後音檔。",
@@ -199,7 +211,7 @@ const translations = {
     confidence_title: "About confidence scores",
     confidence_note: "This heuristic reflects template fit and the gap to the next candidate, not accuracy. Do not change BPM or meter just to raise the score.",
     results_empty_title: "Your results will appear here",
-    results_empty_copy: "Analyze a song to see its tempo, key, sections, and a chord timeline you can audition.",
+    results_empty_copy: "Analyze a song to see the main result as lyrics paired with chords.",
     download_pdf: "Download PDF",
     transposition_title: "Key, transposition & capo",
     transposition_subtitle: "Transpose the chart or save a shifted audio file",
@@ -212,8 +224,16 @@ const translations = {
     confidence_explainer: "Confidence is a heuristic reference, not a measured recognition accuracy.",
     section_chords: "Sections & chords",
     section_subtitle: "Similar sections share a label",
-    lyrics_title: "Vocals, lyrics & chords",
+    lyrics_title: "Lyrics with chords",
     lyrics_subtitle: "Edit recognized text; timings follow the audio",
+    lyrics_settings: "Lyric transcription settings",
+    open_lyrics_settings: "Open lyric transcription settings",
+    more_analysis: "More analysis results & settings",
+    song_sheet_empty: "No chord-and-lyric sheet yet. Open lyric settings to separate vocals and transcribe lyrics.",
+    lyrics_settings: "Lyric transcription settings",
+    open_lyrics_settings: "Open lyric transcription settings",
+    more_analysis: "More analysis results & settings",
+    song_sheet_empty: "No chord-and-lyric sheet yet. Open lyric settings to separate vocals and transcribe lyrics.",
     lyrics_intro: "Separate vocals and transcribe lyrics locally. Models download from Hugging Face on first use: Small ~484 MB, Base ~145 MB. Singing recognition may miss or mishear words; review by listening.",
     recognition_language: "Recognition language",
     auto_detect: "Detect automatically",
@@ -277,6 +297,8 @@ const translations = {
     save_error: "Could not save lyrics.",
     saved_lyrics: "Saved {count} lyric lines. Download the PDF to include lyrics and chords.",
     lyric_line: "Lyric line {number}",
+    edit_lyric: "Edit lyrics",
+    finish_editing: "Done",
     transcribing_label: "Separating and transcribing…",
     transposed_generating: "Creating WAV…",
     transposed_error: "Could not create the transposed audio.",
@@ -315,6 +337,7 @@ function applyLanguage() {
   document.title = t("page_title");
   languageToggle.textContent = currentLanguage === "en" ? "繁體中文" : "English";
   languageToggle.setAttribute("aria-label", currentLanguage === "en" ? "切換為繁體中文" : "Switch to English");
+  updateTranspositionOptions();
   if (fileInput.files?.[0]) fileName.textContent = fileInput.files[0].name;
   if (currentAnalysis) {
     renderStats(currentAnalysis);
@@ -334,27 +357,41 @@ languageToggle.addEventListener("click", () => {
   applyLanguage();
 });
 
+document.querySelector("#open-lyrics-settings").addEventListener("click", () => {
+  lyricsSettings.open = true;
+  lyricsSettings.scrollIntoView({ behavior: "smooth", block: "center" });
+});
+
 const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const notePitches = new Map(noteNames.map((note, index) => [note, index]));
 for (const [note, pitch] of Object.entries({ Db: 1, Eb: 3, Gb: 6, Ab: 8, Bb: 10 })) {
   notePitches.set(note, pitch);
 }
 
-for (let semitones = -12; semitones <= 12; semitones += 1) {
-  const option = document.createElement("option");
-  option.value = String(semitones);
-  option.textContent = semitones === 0
-    ? `${t("no_transposition")} (${t("original_label").toLowerCase()})`
-    : `${semitones > 0 ? "+" : ""}${semitones} ${t("semitones")}`;
-  transposeSelect.append(option);
-}
-transposeSelect.value = "0";
+function updateTranspositionOptions() {
+  const previousShift = transposeSelect.value || "0";
+  const shiftOptions = [];
+  for (let semitones = -12; semitones <= 12; semitones += 1) {
+    const option = document.createElement("option");
+    option.value = String(semitones);
+    option.textContent = semitones === 0
+      ? `${t("no_transposition")} (${t("original_label").toLowerCase()})`
+      : `${semitones > 0 ? "+" : ""}${semitones} ${t("semitones")}`;
+    shiftOptions.push(option);
+  }
+  transposeSelect.replaceChildren(...shiftOptions);
+  transposeSelect.value = previousShift;
 
-for (let fret = 0; fret <= 11; fret += 1) {
-  const option = document.createElement("option");
-  option.value = String(fret);
-  option.textContent = fret === 0 ? t("no_capo") : `${fret} ${t("fret")}`;
-  capoSelect.append(option);
+  const previousCapo = capoSelect.value || "0";
+  const capoOptions = [];
+  for (let fret = 0; fret <= 11; fret += 1) {
+    const option = document.createElement("option");
+    option.value = String(fret);
+    option.textContent = fret === 0 ? t("no_capo") : `${fret} ${t("fret")}`;
+    capoOptions.push(option);
+  }
+  capoSelect.replaceChildren(...capoOptions);
+  capoSelect.value = previousCapo;
 }
 
 fileInput.addEventListener("change", () => {
@@ -608,6 +645,7 @@ transcribeButton.addEventListener("click", async () => {
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || t("transcribe_error"));
     currentLyrics = result.lyrics.map((line) => ({ ...line }));
+    lyricsSettings.open = false;
     lyricsStatus.textContent = currentLyrics.length
       ? t("transcription_note")
       : t("no_lyrics");
@@ -665,7 +703,11 @@ saveLyricsButton.addEventListener("click", async () => {
 });
 
 function renderLyrics() {
-  if (!currentAnalysis || !currentLyrics.length) return;
+  lyricsEmpty.hidden = currentLyrics.length > 0;
+  if (!currentAnalysis || !currentLyrics.length) {
+    lyricsList.hidden = true;
+    return;
+  }
   lyricsList.hidden = false;
   lyricsList.replaceChildren(...currentLyrics.map((line, index) => {
     const card = document.createElement("article");
@@ -685,15 +727,33 @@ function renderLyrics() {
     chords.textContent = chordsForLyrics(line);
     meta.append(seek, chords);
 
+    const lyricText = document.createElement("p");
+    lyricText.className = "lyric-text";
+    lyricText.textContent = line.text;
+
+    const editButton = document.createElement("button");
+    editButton.className = "lyric-edit-button";
+    editButton.type = "button";
+    editButton.textContent = t("edit_lyric");
+
     const text = document.createElement("textarea");
     text.rows = 2;
     text.maxLength = 500;
     text.value = line.text;
     text.setAttribute("aria-label", t("lyric_line", { number: index + 1 }));
+    text.hidden = true;
     text.addEventListener("input", () => {
       currentLyrics[index] = { ...currentLyrics[index], text: text.value };
+      lyricText.textContent = text.value;
     });
-    card.append(meta, text);
+    editButton.addEventListener("click", () => {
+      const editing = !text.hidden;
+      text.hidden = editing;
+      lyricText.hidden = !editing;
+      editButton.textContent = editing ? t("edit_lyric") : t("finish_editing");
+      if (!editing) text.focus();
+    });
+    card.append(meta, lyricText, editButton, text);
     return card;
   }));
 }

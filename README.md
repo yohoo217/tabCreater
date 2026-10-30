@@ -73,7 +73,7 @@ chord-sections-ui
 python -m chord_sections.web
 ```
 
-工具會開啟 `http://127.0.0.1:8765`。選取本機音檔後，可填入已知 BPM 或使用自動估計，並設定拍號、每幾拍估一次和弦、每段幾小節、第一拍偏移及分析解析度。分析完成後可預覽時間軸、點時間跳轉播放並下載 PDF。音檔只暫存在本機記憶體／短暫暫存檔，分析後刪除；PDF 結果暫存在服務記憶體，最多保留最近 5 份，重啟服務即清除。服務只綁定本機 `127.0.0.1`。
+工具會開啟 `http://127.0.0.1:8765`。選取本機音檔後，可填入已知 BPM 或使用自動估計，並設定拍號、每幾拍估一次和弦、每段幾小節、第一拍偏移及分析解析度。分析完成後，主要結果以歌詞搭配和弦呈現；拍速、調性、段落及完整和弦時間軸預設收合，可展開查看。歌詞辨識設定也收在獨立面板中。可點時間跳轉播放並下載 PDF。音檔只暫存在本機記憶體／短暫暫存檔，分析後刪除；PDF 結果暫存在服務記憶體，最多保留最近 5 份，重啟服務即清除。服務只綁定本機 `127.0.0.1`。
 
 分析後可校正原調、選擇目標移調（±半音）及 Capo 位置。PDF 會保留原曲和弦、移調後的實際和弦、Capo 指型。計算方式：移調後和弦 = 原曲和弦 + 移調半音；Capo 指型 = 移調後和弦 - Capo 品數。例如原曲 C，升 2 半音後是 D；使用 Capo 2 時彈 C 指型即可。選「原調校正」會依所選主音整體平移辨識和弦，和弦的大／小調品質仍沿用分析結果。
 
@@ -148,7 +148,7 @@ If you installed the project in editable mode, you can also run `python -m chord
 chord-sections-ui
 ```
 
-Or run `python -m chord_sections.web`. Open `http://127.0.0.1:8765`, choose an audio file, set the tempo and meter if known, and analyze it. The interface supports Traditional Chinese and English; use the language button in the header to switch. It can preview chord timestamps, transpose the chart, show capo shapes, recognize lyrics locally, align chords with lyric segments, and export PDFs. PDF analysis results stay in service memory (up to five reports) and are cleared when the service stops.
+Or run `python -m chord_sections.web`. Open `http://127.0.0.1:8765`, choose an audio file, set the tempo and meter if known, and analyze it. The main result is lyrics paired with chords; tempo, key, sections, and the full chord timeline are collapsed until opened. Lyric recognition settings are also tucked into a disclosure panel. The interface supports Traditional Chinese and English; use the language button in the header to switch. It can preview chord timestamps, transpose the chart, show capo shapes, recognize lyrics locally, align chords with lyric segments, and export PDFs. PDF analysis results stay in service memory (up to five reports) and are cleared when the service stops.
 
 For lyrics, choose a recognition language and model, optionally separate vocals, then review the recognized timestamps and text. You can import a `.txt` file to replace text one line per recognized segment; importing text does not infer singing timestamps. Save edited lyrics to include them in the PDF.
 
