@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chord-sections"
+version = "0.1.0"
+description = "Local audio chord estimation and repeated-section summaries"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "audioread>=3.0.1",
+    "flask>=3.0",
+    "librosa>=0.11",
+    "numpy>=1.24",
+    "reportlab>=4.0",
+    "soundfile>=0.12",
+]
+
+[project.optional-dependencies]
+ai = [
+    "av>=11,<19",
+    "demucs>=4.1.0",
+    "faster-whisper>=1.2.1",
+]
+
+[project.scripts]
+chord-sections = "chord_sections.cli:main"
+chord-sections-ui = "chord_sections.web:main"
+
+[tool.setuptools.packages.find]
+include = ["chord_sections*"]
+
+[tool.setuptools.package-data]
+chord_sections = ["static/*.css", "static/*.js", "templates/*.html"]

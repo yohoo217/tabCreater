@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f5f6f1">
+    <link rel="icon" href="data:,">
+    <title data-i18n="page_title">和弦整理室</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script defer src="{{ url_for('static', filename='app.js') }}"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="和弦整理室首頁" data-i18n-aria-label="home">
+        <span class="brand-mark">C</span>
+        <span data-i18n="brand">和弦整理室</span>
+      </a>
+      <div class="topbar-actions">
+        <span class="privacy-note"><span class="privacy-dot"></span><span data-i18n="privacy">音檔只在這台電腦處理</span></span>
+        <button id="language-toggle" class="language-toggle" type="button" aria-label="Switch language">English</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="intro">
+        <p class="eyebrow">LOCAL AUDIO WORKSPACE</p>
+        <h1 data-i18n="hero_title">把一首歌，整理成看得懂的和弦表。</h1>
+        <p class="intro-copy" data-i18n="hero_copy">選擇音檔、調整拍子設定，分析後即可預覽和下載 PDF。</p>
+      </section>
+
+      <div class="workspace">
+        <section class="panel setup-panel" aria-labelledby="setup-title">
+          <div class="panel-heading">
+            <div>
+              <p class="step-label">STEP 01</p>
+              <h2 id="setup-title" data-i18n="setup_title">歌曲與拍子</h2>
+            </div>
+            <span class="local-badge" data-i18n="local_badge">只在本機</span>
+          </div>
+
+          <form id="analysis-form">
+            <label class="field-label" for="title" data-i18n="song_title">歌曲名稱</label>
+            <input id="title" name="title" type="text" maxlength="120" placeholder="可留空，使用檔名" data-i18n-placeholder="song_title_placeholder">
+
+            <label class="field-label" for="audio" data-i18n="choose_audio">選擇音訊</label>
+            <label class="file-picker" for="audio">
+              <span class="upload-icon" aria-hidden="true">↑</span>
+              <span class="file-copy">
+                <strong id="file-name" data-i18n="choose_file">點此選擇歌曲檔案</strong>
+                <small data-i18n="supported_formats">WAV、MP3、M4A、FLAC、OGG 或 AIFF，最大 300 MB</small>
+              </span>
+              <input id="audio" name="audio" type="file" accept="audio/*,.wav,.mp3,.m4a,.flac,.ogg,.aiff,.aif" required>
+            </label>
+
+            <audio id="audio-preview" controls hidden></audio>
+
+            <div class="field-grid">
+              <div>
+                <label class="field-label" for="bpm" data-i18n="tempo">速度 BPM</label>
+                <div class="input-suffix">
+                  <input id="bpm" name="bpm" type="number" min="30" max="300" step="0.1" placeholder="自動估計" data-i18n-placeholder="auto_estimate">
+                  <span>BPM</span>
+                </div>
+                <p class="field-help" data-i18n="tempo_help">知道歌曲速度時可手動填寫；留空會自動估計。</p>
+              </div>
+              <div>
+                <label class="field-label" for="time-signature" data-i18n="time_signature">拍號</label>
+                <select id="time-signature" aria-label="拍號" data-i18n-aria-label="time_signature">
+                  <option value="4/4" selected data-i18n="meter_44">4 / 4 常見拍</option>
+                  <option value="3/4" data-i18n="meter_34">3 / 4 圓舞曲</option>
+                  <option value="2/4">2 / 4</option>
+                  <option value="6/8">6 / 8</option>
+                  <option value="5/4">5 / 4</option>
+                  <option value="7/8">7 / 8</option>
+                </select>
+                <input id="time-signature-numerator" name="time_signature_numerator" type="hidden" value="4">
+                <input id="time-signature-denominator" name="time_signature_denominator" type="hidden" value="4">
+                <p class="field-help" data-i18n="meter_help">自動偵測不一定可靠，請依歌曲需要修改。</p>
+              </div>
+            </div>
+
+            <details class="advanced-settings">
+              <summary data-i18n="advanced_timing">進階拍子設定</summary>
+              <div class="field-grid advanced-grid">
+                <div>
+                  <label class="field-label" for="beats-per-chord" data-i18n="beats_per_chord">每幾拍估一次和弦</label>
+                  <select id="beats-per-chord" name="beats_per_chord">
+                    <option value="1" data-i18n="every_beat">每 1 拍（較細）</option>
+                    <option value="2" selected data-i18n="every_two_beats">每 2 拍（建議）</option>
+                    <option value="4" data-i18n="every_four_beats">每 4 拍（較平滑）</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="field-label" for="bars-per-section" data-i18n="bars_per_section">每段幾小節</label>
+                  <select id="bars-per-section" name="bars_per_section">
+                    <option value="2" data-i18n="bars_2">2 小節</option>
+                    <option value="4" selected data-i18n="bars_4">4 小節（建議）</option>
+                    <option value="8" data-i18n="bars_8">8 小節</option>
+                  </select>
+                </div>
+                <div class="full-width">
+                  <label class="field-label" for="downbeat-offset" data-i18n="downbeat_offset">第一拍偏移（秒）</label>
+                  <input id="downbeat-offset" name="downbeat_offset_seconds" type="number" min="0" step="0.01" value="0">
+                  <p class="field-help" data-i18n="downbeat_help">若前奏或檔案開頭有空白，可微調分拍起點。</p>
+                </div>
+              </div>
+            </details>
+
+            <div class="field">
+              <label class="field-label" for="chroma-method" data-i18n="analysis_resolution">分析解析度</label>
+              <select id="chroma-method" name="chroma_method">
+                <option value="stft" selected data-i18n="resolution_fast">一般（較快）</option>
+                <option value="cqt" data-i18n="resolution_cqt">高解析 CQT（可比較）</option>
+              </select>
+              <p class="field-help" data-i18n="resolution_help">耗時依音檔和電腦而異；可比較結果，但不保證每首歌都更準。</p>
+            </div>
+
+            <label class="check-row" for="harmonic-focus">
+              <input id="harmonic-focus" name="harmonic_focus" type="checkbox" checked>
+              <span>
+                <strong data-i18n="harmonic_focus">加強和聲分析</strong>
+                <small data-i18n="harmonic_focus_help">弱化鼓與瞬態聲響；不保證每首歌都會更準。</small>
+              </span>
+            </label>
+
+            <button id="analyze-button" class="primary-button" type="submit">
+              <span class="button-label" data-i18n="analyze_song">分析這首歌</span>
+              <span class="button-spinner" aria-hidden="true"></span>
+            </button>
+            <p id="error-message" class="error-message" role="alert" hidden></p>
+          </form>
+
+          <div class="confidence-note">
+            <span class="info-mark">i</span>
+            <p><strong data-i18n="confidence_title">關於信心分數</strong><br><span data-i18n="confidence_note">它是模型符合度與候選差距的啟發式指標，不是準確率。不要只為了分數變高而更改 BPM 或拍號。</span></p>
+          </div>
+        </section>
+
+        <section class="panel results-panel" aria-labelledby="results-title">
+          <div class="results-empty" id="results-empty">
+            <div class="empty-graphic" aria-hidden="true">
+              <span class="empty-bar bar-one"></span>
+              <span class="empty-bar bar-two"></span>
+              <span class="empty-bar bar-three"></span>
+              <span class="empty-bar bar-four"></span>
+            </div>
+            <p class="step-label">STEP 02</p>
+            <h2 id="results-title" data-i18n="results_empty_title">分析結果會在這裡</h2>
+            <p data-i18n="results_empty_copy">選擇歌曲後，會看到拍速、調性、段落摘要和可回聽的和弦時間軸。</p>
+          </div>
+
+          <div id="results-content" hidden>
+            <div class="result-header">
+              <div>
+                <p class="step-label">ANALYSIS RESULT</p>
+                <h2 id="result-title"></h2>
+              </div>
+              <a id="download-pdf" class="download-button" href="#" aria-label="下載 PDF" data-i18n-aria-label="download_pdf"><span data-i18n="download_pdf">下載 PDF</span> <span>↓</span></a>
+            </div>
+            <div class="stats-grid" id="stats-grid"></div>
+            <div class="transposition-panel">
+              <div class="section-title-row">
+                <h3 data-i18n="transposition_title">調性、移調與 Capo</h3>
+                <span data-i18n="transposition_subtitle">和弦譜或另存移調後音檔</span>
+              </div>
+              <div class="field-grid transposition-grid">
+                <div>
+                  <label class="field-label" for="original-key" data-i18n="original_key">原調校正</label>
+                  <select id="original-key" aria-label="原調校正" data-i18n-aria-label="original_key">
+                    <option value="auto" data-i18n="use_estimate">使用自動估計</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="field-label" for="transpose-semitones" data-i18n="target_transposition">目標移調</label>
+                  <select id="transpose-semitones" aria-label="目標移調" data-i18n-aria-label="target_transposition"></select>
+                </div>
+                <div>
+                  <label class="field-label" for="capo-fret" data-i18n="capo_position">Capo 位置</label>
+                  <select id="capo-fret" aria-label="Capo 位置" data-i18n-aria-label="capo_position"></select>
+                </div>
+                <p id="transpose-summary" class="field-help transpose-summary"></p>
+              </div>
+              <button id="download-transposed-audio" class="secondary-button" type="button" disabled>
+                <span data-i18n="download_transposed_wav">下載移調後 WAV</span>
+              </button>
+              <p class="field-help audio-shift-help" data-i18n="audio_shift_help">這會另存一份 WAV，不會覆寫原檔；原音檔播放器保持不變。</p>
+            </div>
+            <p class="confidence-explainer" data-i18n="confidence_explainer">信心分數為啟發式參考，不代表真實辨識準確率。</p>
+
+            <section class="result-section">
+              <div class="section-title-row">
+                <h3 data-i18n="section_chords">段落和弦</h3>
+                <span data-i18n="section_subtitle">相似段落使用相同標記</span>
+              </div>
+              <div id="section-list" class="section-list"></div>
+            </section>
+
+            <section class="result-section lyrics-section" aria-labelledby="lyrics-title">
+              <div class="section-title-row">
+                <h3 id="lyrics-title" data-i18n="lyrics_title">人聲歌詞與和弦對齊</h3>
+                <span data-i18n="lyrics_subtitle">辨識結果可修改，時間以音檔為準</span>
+              </div>
+              <p class="lyrics-intro">
+                <span data-i18n="lyrics_intro">本機分離人聲並辨識歌詞。首次執行會從 Hugging Face 下載所選模型；Small 約 484 MB，Base 約 145 MB。
+                歌唱辨識可能漏字或聽錯，請回聽校對。</span>
+              </p>
+              <div class="lyrics-controls">
+                <label class="field-label" for="lyrics-language" data-i18n="recognition_language">辨識語言</label>
+                <select id="lyrics-language">
+                  <option value="auto" selected data-i18n="auto_detect">自動偵測</option>
+                  <option value="zh">中文</option>
+                  <option value="en">英文</option>
+                  <option value="ja">日文</option>
+                  <option value="ko">韓文</option>
+                </select>
+                <label class="field-label" for="lyrics-model" data-i18n="model">模型</label>
+                <select id="lyrics-model">
+                  <option value="small" selected data-i18n="model_small">Small（建議，約 484 MB）</option>
+                  <option value="base" data-i18n="model_base">Base（較小，約 145 MB）</option>
+                </select>
+                <label class="check-row lyrics-separation" for="separate-vocals">
+                  <input id="separate-vocals" type="checkbox" checked>
+                  <span><strong data-i18n="separate_vocals">先分離人聲</strong><small data-i18n="separate_vocals_help">建議開啟；首次使用會另外下載 Demucs 模型約 84 MB。</small></span>
+                </label>
+                <button id="transcribe-button" class="primary-button" type="button" disabled>
+                  <span class="button-label" data-i18n="transcribe_button">分離人聲並辨識歌詞</span>
+                  <span class="button-spinner" aria-hidden="true"></span>
+                </button>
+                <p id="lyrics-status" class="field-help" role="status" data-i18n="checking_models">檢查本機歌詞模型…</p>
+              </div>
+
+              <details class="lyrics-correction" id="lyrics-correction" hidden>
+                <summary data-i18n="import_lyrics">匯入文字歌詞校正（每行需對應一條辨識結果）</summary>
+                <label class="field-label" for="lyrics-file" data-i18n="lyrics_txt">選擇純文字歌詞 .txt</label>
+                <input id="lyrics-file" type="file" accept=".txt,text/plain">
+                <textarea id="lyrics-reference" rows="5" placeholder="每行歌詞對應一條辨識結果；匯入後仍可逐行編輯。" data-i18n-placeholder="lyrics_placeholder"></textarea>
+                <button id="apply-lyrics" class="secondary-button" type="button" data-i18n="apply_lyrics">依行套用歌詞</button>
+              </details>
+
+              <div id="lyrics-list" class="lyrics-list" hidden></div>
+              <button id="save-lyrics" class="secondary-button" type="button" hidden data-i18n="save_lyrics">儲存歌詞到 PDF</button>
+            </section>
+
+            <section class="result-section timeline-section">
+              <div class="section-title-row">
+                <h3 data-i18n="chord_timeline">和弦時間軸</h3>
+                <span data-i18n="timeline_help">點選時間可跳轉聆聽</span>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr><th data-i18n="start">開始</th><th data-i18n="end">結束</th><th data-i18n="original_chord">原曲和弦</th><th data-i18n="transposed">移調後</th><th data-i18n="capo_shape">Capo 指型</th><th data-i18n="confidence">信心</th></tr>
+                  </thead>
+                  <tbody id="chord-rows"></tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        </section>
+      </div>
+
+      <footer data-i18n="footer_note">本機分析工具 · 和弦與段落為自動估計，請搭配聆聽校對。</footer>
+    </main>
+  </body>
+</html>
