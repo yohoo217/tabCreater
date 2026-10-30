@@ -72,6 +72,10 @@ const translations = {
     confidence_note: "它是模型符合度與候選差距的啟發式指標，不是準確率。不要只為了分數變高而更改 BPM 或拍號。",
     results_empty_title: "分析結果會在這裡",
     results_empty_copy: "選擇歌曲並分析後，主要結果會以歌詞搭配和弦的方式呈現。",
+    chord_diagram_title: "吉他指法",
+    unavailable_chord_shape: "目前沒有這個和弦的常用指法圖。",
+    shape_label: "指法",
+    chord_shape_info: "指法 {shape} · {capo}",
     download_pdf: "下載 PDF",
     transposition_title: "調性、移調與 Capo",
     transposition_subtitle: "和弦譜或另存移調後音檔",
@@ -212,6 +216,10 @@ const translations = {
     confidence_note: "This heuristic reflects template fit and the gap to the next candidate, not accuracy. Do not change BPM or meter just to raise the score.",
     results_empty_title: "Your results will appear here",
     results_empty_copy: "Analyze a song to see the main result as lyrics paired with chords.",
+    chord_diagram_title: "Guitar fingering",
+    unavailable_chord_shape: "A common fingering diagram is not available for this chord yet.",
+    shape_label: "shape",
+    chord_shape_info: "Shape {shape} · {capo}",
     download_pdf: "Download PDF",
     transposition_title: "Key, transposition & capo",
     transposition_subtitle: "Transpose the chart or save a shifted audio file",
@@ -470,6 +478,11 @@ function renderStats(result) {
   const bpm = result.tempo_bpm == null ? t("estimated_unknown") : `${formatNumber(result.tempo_bpm)} BPM`;
   const selectedKey = currentOriginalKey();
   const targetKey = transposeKey(selectedKey, Number(transposeSelect.value));
+  document.querySelector("#song-sheet-meta").textContent = [
+    `${t("tempo_stat")}: ${bpm}`,
+    `${t("meter_stat")}: ${result.time_signature}`,
+    `${t("key_target")}: ${selectedKey || t("estimated_unknown")} → ${targetKey || t("estimated_unknown")}`,
+  ].join("  ·  ");
   const stats = [
     [t("length"), formatTime(result.duration)],
     [t("tempo_stat"), bpm],
@@ -722,10 +735,30 @@ function renderLyrics() {
       audioPreview.currentTime = line.start;
       audioPreview.play().catch(() => showError(t("playback_error")));
     });
-    const chords = document.createElement("span");
-    chords.className = "lyric-chords";
-    chords.textContent = chordsForLyrics(line);
-    meta.append(seek, chords);
+    meta.append(seek);
+
+    const chordLine = document.createElement("div");
+    chordLine.className = "lyric-chord-line";
+    const events = chordEventsForLyrics(line);
+    if (!events.length) {
+      const noChord = document.createElement("span");
+      noChord.className = "lyric-chord-empty";
+      noChord.textContent = t("no_chord");
+      chordLine.append(noChord);
+    } else {
+      const duration = Math.max(line.end - line.start, 0.001);
+      events.forEach((event) => {
+        const soundingChord = transposedChord(event.chord);
+        const shape = transposeChord(soundingChord, -Number(capoSelect.value));
+        const marker = document.createElement("span");
+        const relativeStart = Math.max(0, event.start - line.start);
+        const position = Math.min(96, (relativeStart / duration) * 100);
+        marker.className = `lyric-chord-marker${position > 65 ? " tooltip-right" : ""}`;
+        marker.style.left = `${position}%`;
+        marker.append(createChordButton(soundingChord, shape));
+        chordLine.append(marker);
+      });
+    }
 
     const lyricText = document.createElement("p");
     lyricText.className = "lyric-text";
@@ -753,16 +786,132 @@ function renderLyrics() {
       editButton.textContent = editing ? t("edit_lyric") : t("finish_editing");
       if (!editing) text.focus();
     });
-    card.append(meta, lyricText, editButton, text);
+    card.append(meta, chordLine, lyricText, editButton, text);
     return card;
   }));
 }
 
-function chordsForLyrics(line) {
-  const chords = currentAnalysis.chords
+function chordEventsForLyrics(line) {
+  const events = currentAnalysis.chords
     .filter((event) => event.end > line.start && event.start < line.end)
-    .map((event) => transposedChord(event.chord));
-  return deduplicate(chords).join(" → ") || t("no_chord");
+    .map((event) => ({
+      ...event,
+      start: Math.max(event.start, line.start),
+      end: Math.min(event.end, line.end),
+    }));
+  return events.filter((event, index) => (
+    index === 0 || event.chord !== events[index - 1].chord
+  ));
+}
+
+function createChordButton(chord, shape) {
+  const button = document.createElement("button");
+  button.className = "lyric-chord";
+  button.type = "button";
+  button.textContent = chord;
+  button.setAttribute("aria-label", `${chord} ${t("chord_diagram_title")}: ${shape}`);
+  const tooltip = document.createElement("span");
+  tooltip.className = "chord-tooltip";
+  tooltip.setAttribute("role", "tooltip");
+  const heading = document.createElement("strong");
+  heading.textContent = `${chord} (${shape} ${t("shape_label")})`;
+  tooltip.append(heading);
+  const diagram = createChordDiagram(shape);
+  if (diagram) {
+    tooltip.append(diagram);
+    const fingering = document.createElement("span");
+    fingering.className = "chord-fingering";
+    const capoPosition = Number(capoSelect.value);
+    const capo = capoPosition ? `${t("capo_position")} ${capoPosition}` : t("no_capo");
+    fingering.textContent = t("chord_shape_info", { shape, capo });
+    tooltip.append(fingering);
+  } else {
+    const unavailable = document.createElement("span");
+    unavailable.className = "chord-fingering";
+    unavailable.textContent = t("unavailable_chord_shape");
+    tooltip.append(unavailable);
+  }
+  button.append(tooltip);
+  return button;
+}
+
+const guitarChordShapes = {
+  C: { frets: ["x", 3, 2, 0, 1, 0], fingers: ["", 3, 2, "", 1, ""], base: 1 },
+  "C#": { frets: ["x", 4, 6, 6, 6, 4], fingers: ["", 1, 3, 3, 3, 1], base: 4 },
+  D: { frets: ["x", "x", 0, 2, 3, 2], fingers: ["", "", "", 1, 3, 2], base: 1 },
+  "D#": { frets: ["x", 6, 8, 8, 8, 6], fingers: ["", 1, 3, 3, 3, 1], base: 6 },
+  E: { frets: [0, 2, 2, 1, 0, 0], fingers: ["", 2, 3, 1, "", ""], base: 1 },
+  F: { frets: [1, 3, 3, 2, 1, 1], fingers: [1, 3, 4, 2, 1, 1], base: 1 },
+  "F#": { frets: [2, 4, 4, 3, 2, 2], fingers: [1, 3, 4, 2, 1, 1], base: 2 },
+  G: { frets: [3, 2, 0, 0, 0, 3], fingers: [2, 1, "", "", "", 3], base: 1 },
+  "G#": { frets: [4, 6, 6, 5, 4, 4], fingers: [1, 3, 4, 2, 1, 1], base: 4 },
+  A: { frets: ["x", 0, 2, 2, 2, 0], fingers: ["", "", 1, 2, 3, ""], base: 1 },
+  "A#": { frets: ["x", 1, 3, 3, 3, 1], fingers: ["", 1, 3, 3, 3, 1], base: 1 },
+  B: { frets: ["x", 2, 4, 4, 4, 2], fingers: ["", 1, 3, 3, 3, 1], base: 2 },
+  Cm: { frets: ["x", 3, 5, 5, 4, 3], fingers: ["", 1, 3, 4, 2, 1], base: 3 },
+  "C#m": { frets: ["x", 4, 6, 6, 5, 4], fingers: ["", 1, 3, 4, 2, 1], base: 4 },
+  Dm: { frets: ["x", "x", 0, 2, 3, 1], fingers: ["", "", "", 2, 3, 1], base: 1 },
+  "D#m": { frets: ["x", 6, 8, 8, 7, 6], fingers: ["", 1, 3, 4, 2, 1], base: 6 },
+  Em: { frets: [0, 2, 2, 0, 0, 0], fingers: ["", 2, 3, "", "", ""], base: 1 },
+  Fm: { frets: [1, 3, 3, 1, 1, 1], fingers: [1, 3, 4, 1, 1, 1], base: 1 },
+  "F#m": { frets: [2, 4, 4, 2, 2, 2], fingers: [1, 3, 4, 1, 1, 1], base: 2 },
+  Gm: { frets: [3, 5, 5, 3, 3, 3], fingers: [1, 3, 4, 1, 1, 1], base: 3 },
+  "G#m": { frets: [4, 6, 6, 4, 4, 4], fingers: [1, 3, 4, 1, 1, 1], base: 4 },
+  Am: { frets: ["x", 0, 2, 2, 1, 0], fingers: ["", "", 2, 3, 1, ""], base: 1 },
+  "A#m": { frets: ["x", 1, 3, 3, 2, 1], fingers: ["", 1, 3, 4, 2, 1], base: 1 },
+  Bm: { frets: ["x", 2, 4, 4, 3, 2], fingers: ["", 1, 3, 4, 2, 1], base: 2 },
+};
+
+function createChordDiagram(chord) {
+  const shape = guitarChordShapes[chord];
+  if (!shape) return null;
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.classList.add("chord-diagram");
+  svg.setAttribute("viewBox", "0 0 124 126");
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", `${chord} ${t("chord_diagram_title")}`);
+  const svgElement = (name, attributes) => {
+    const element = document.createElementNS("http://www.w3.org/2000/svg", name);
+    for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, String(value));
+    return element;
+  };
+  const stringXs = [24, 39, 54, 69, 84, 99];
+  const fretYs = [22, 42, 62, 82, 102, 122];
+  const displayedStart = shape.base;
+  svg.append(svgElement("line", {
+    x1: 17, y1: fretYs[0], x2: 106, y2: fretYs[0],
+    class: displayedStart === 1 ? "chord-nut" : "chord-fret",
+  }));
+  for (const x of stringXs) {
+    svg.append(svgElement("line", { x1: x, y1: fretYs[0], x2: x, y2: fretYs[5], class: "chord-string" }));
+  }
+  for (let fret = 1; fret <= 5; fret += 1) {
+    svg.append(svgElement("line", {
+      x1: 17, y1: fretYs[fret], x2: 106, y2: fretYs[fret], class: "chord-fret",
+    }));
+  }
+  if (displayedStart > 1) {
+    const label = svgElement("text", { x: 2, y: 35, class: "chord-fret-number" });
+    label.textContent = String(displayedStart);
+    svg.append(label);
+  }
+  shape.frets.forEach((fret, index) => {
+    const x = stringXs[index];
+    if (fret === "x" || fret === 0) {
+      const marker = svgElement("text", { x, y: 15, class: "chord-open-marker" });
+      marker.textContent = fret === "x" ? "×" : "○";
+      svg.append(marker);
+      return;
+    }
+    const y = fretYs[fret - displayedStart] + 10;
+    svg.append(svgElement("circle", { cx: x, cy: y, r: 5.5, class: "chord-finger-dot" }));
+    if (shape.fingers[index]) {
+      const finger = svgElement("text", { x, y: y + 2.5, class: "chord-finger-number" });
+      finger.textContent = String(shape.fingers[index]);
+      svg.append(finger);
+    }
+  });
+  return svg;
 }
 
 function setTranscribing(loading) {

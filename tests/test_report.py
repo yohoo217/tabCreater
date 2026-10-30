@@ -58,6 +58,17 @@ class ReportTests(unittest.TestCase):
         self.assertTrue(report.startswith(b"%PDF-"))
         self.assertGreater(len(report), 1000)
 
+    def test_pdf_lyrics_pair_chords_above_each_lyric_line(self) -> None:
+        from chord_sections.pdf_report import _chords_for_lyrics
+
+        chords = _chords_for_lyrics(
+            LyricLine(1.0, 6.0, "歌詞"),
+            self.result,
+            lambda chord: chord,
+        )
+
+        self.assertEqual(chords, "C → Am")
+
 
 if __name__ == "__main__":
     unittest.main()

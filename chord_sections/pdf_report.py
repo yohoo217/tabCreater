@@ -75,6 +75,16 @@ def render_pdf(
     )
     styles.add(
         ParagraphStyle(
+            name="LyricSheetCell",
+            parent=styles["BodyText"],
+            fontName=FONT_NAME,
+            fontSize=10,
+            leading=15,
+            textColor=colors.HexColor("#364641"),
+        )
+    )
+    styles.add(
+        ParagraphStyle(
             name="CJKHeading",
             parent=styles["Heading2"],
             fontName=FONT_NAME,
@@ -127,7 +137,7 @@ def render_pdf(
     )
 
     bpm = f"{result.tempo_bpm:g} BPM" if result.tempo_bpm is not None else _text(language, "unknown")
-    key = effective_original_key or "未能估計"
+    key = effective_original_key or _text(language, "unknown")
     target_key_label = target_key or _text(language, "unknown")
     capo_label = f"Capo {capo_fret}" if capo_fret else _text(language, "no_capo")
     transposition_label = f"{semitones:+d} {_text(language, 'semitones')}" if semitones else _text(language, "original_key")
@@ -147,7 +157,6 @@ def render_pdf(
             styles["CJKBody"],
         ),
         Spacer(1, 8),
-        Paragraph(_text(language, "section_summary"), styles["CJKHeading"]),
     ]
 
     def transform(chord: str) -> str:
@@ -164,45 +173,60 @@ def render_pdf(
                 chords.append(transformed)
         return " → ".join(chords) or "N.C."
 
-    section_rows: list[list[object]] = [
-        [
-            Paragraph(_text(language, "section"), styles["TableHeaderCJK"]),
-            Paragraph(_text(language, "time"), styles["TableHeaderCJK"]),
-            Paragraph(_text(language, "chord_progression"), styles["TableHeaderCJK"]),
-        ]
-    ]
-    for section in result.sections:
-        section_rows.append(
-            [
-                section.label,
-                f"{_format_time(section.start)} – {_format_time(section.end)}",
-                Paragraph(_escape(section_progression(section)), styles["ChordCell"]),
-            ]
-        )
-    sections_table = Table(section_rows, colWidths=(48, 132, 330), repeatRows=1)
-    sections_table.setStyle(_table_style())
-    story.append(sections_table)
     if lyrics:
         story.append(Paragraph(_text(language, "lyrics_chords"), styles["CJKHeading"]))
+        story.append(
+            Paragraph(
+                _text(language, "lyrics_chords_note"),
+                styles["CJKSmall"],
+            )
+        )
+        story.append(Spacer(1, 6))
         lyric_rows: list[list[object]] = [
             [
                 Paragraph(_text(language, "time"), styles["TableHeaderCJK"]),
-                Paragraph(_text(language, "chords"), styles["TableHeaderCJK"]),
-                Paragraph(_text(language, "lyrics"), styles["TableHeaderCJK"]),
+                Paragraph(_text(language, "lyrics_and_chords"), styles["TableHeaderCJK"]),
             ]
         ]
         for line in lyrics:
-            line_chords = _chords_for_lyrics(line, result, transform)
+            line_chords = _chords_for_lyrics(line, result, transform) or _text(language, "no_chord")
             lyric_rows.append(
                 [
                     f"{_format_time(line.start)} – {_format_time(line.end)}",
-                    Paragraph(_escape(line_chords), styles["ChordCell"]),
-                    Paragraph(_escape(line.text), styles["ChordCell"]),
+                    Paragraph(
+                        f'<font color="#2a6856"><b>{_escape(line_chords)}</b></font><br/>'
+                        f"{_escape(line.text)}",
+                        styles["LyricSheetCell"],
+                    ),
                 ]
             )
-        lyric_table = LongTable(lyric_rows, colWidths=(80, 110, 320), repeatRows=1)
+        lyric_table = LongTable(lyric_rows, colWidths=(80, 430), repeatRows=1)
         lyric_table.setStyle(_table_style())
         story.append(lyric_table)
+    if result.sections:
+        story.extend(
+            [
+                Paragraph(_text(language, "section_summary"), styles["CJKHeading"]),
+            ]
+        )
+        section_rows: list[list[object]] = [
+            [
+                Paragraph(_text(language, "section"), styles["TableHeaderCJK"]),
+                Paragraph(_text(language, "time"), styles["TableHeaderCJK"]),
+                Paragraph(_text(language, "chord_progression"), styles["TableHeaderCJK"]),
+            ]
+        ]
+        for section in result.sections:
+            section_rows.append(
+                [
+                    section.label,
+                    f"{_format_time(section.start)} – {_format_time(section.end)}",
+                    Paragraph(_escape(section_progression(section)), styles["ChordCell"]),
+                ]
+            )
+        sections_table = Table(section_rows, colWidths=(48, 132, 330), repeatRows=1)
+        sections_table.setStyle(_table_style())
+        story.append(sections_table)
     story.extend(
         [
             Paragraph(_text(language, "chord_timeline"), styles["CJKHeading"]),
@@ -285,6 +309,8 @@ def _text(language: str, key: str) -> str:
             "lyrics_chords": "歌詞與和弦對齊",
             "chords": "和弦",
             "lyrics": "歌詞",
+            "lyrics_and_chords": "和弦與歌詞",
+            "lyrics_chords_note": "和弦列在歌詞上方；請搭配音訊確認自動估計結果。",
             "chord_timeline": "和弦時間軸",
             "confidence_note": "信心指標是啟發式分數，不是校準機率或辨識準確率。低分的和弦建議回聽確認。",
             "start": "開始",
@@ -312,6 +338,8 @@ def _text(language: str, key: str) -> str:
             "lyrics_chords": "Lyrics & chords",
             "chords": "Chords",
             "lyrics": "Lyrics",
+            "lyrics_and_chords": "Chords & lyrics",
+            "lyrics_chords_note": "Chords are shown above each lyric line. Review the estimates while listening.",
             "chord_timeline": "Chord timeline",
             "confidence_note": "Confidence is a heuristic score, not a calibrated probability or recognition accuracy. Review low-confidence chords by listening.",
             "start": "Start",
